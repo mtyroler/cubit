@@ -15,16 +15,24 @@ struct CubitApp: App {
 
             Divider()
 
+            SettingsLink {
+                Text("Settings…")
+            }
+            .keyboardShortcut(",", modifiers: [.command])
+
             Button("About Cubit") {
                 NSApplication.shared.orderFrontStandardAboutPanel(nil)
             }
+
+            Divider()
 
             Button("Quit Cubit") {
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")
         } label: {
-            if let percent = appDelegate.overlayController.appState.draftPercent {
+            if appDelegate.settings.showMenuBarPercent,
+               let percent = appDelegate.overlayController.appState.draftPercent {
                 Text(percent)
             } else {
                 Image(systemName: "ruler")
@@ -33,7 +41,11 @@ struct CubitApp: App {
         .menuBarExtraStyle(.menu)
 
         Settings {
-            EmptyView()
+            if let hotkeyManager = appDelegate.hotkeyManager {
+                SettingsView(settings: appDelegate.settings, hotkeyManager: hotkeyManager)
+            } else {
+                EmptyView()
+            }
         }
     }
 }

@@ -11,11 +11,15 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var provider: WindowInfoProviding?
     var screenRects: [CanonicalRect] = []
     var excludedPID: pid_t = 0
+    /// Dim fill alpha outside measured/drafted rects — configurable in Settings, defaults to 15%.
+    var dimOpacity: CGFloat = CGFloat(SettingsStore.defaultDimOpacity)
     var onDismiss: (() -> Void)?
     var onDraftChanged: (() -> Void)?
     var onExportSave: (() -> Void)?
     var onExportCopy: (() -> Void)?
     var exportDragProvider: (() -> NSItemProvider?)?
+    var currentMetadataToggles: (() -> MetadataToggles)?
+    var onMetadataTogglesChanged: ((MetadataToggles, Bool) -> Void)?
 
     private struct HandleTarget {
         var xEdge: RectEdge?
@@ -151,7 +155,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             }
         }
 
-        NSColor.black.withAlphaComponent(0.15).setFill()
+        NSColor.black.withAlphaComponent(dimOpacity).setFill()
         dim.fill()
     }
 
@@ -398,7 +402,11 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         let view = ExportMenuView(
             onSave: { [weak self] in self?.hideExportMenu(); self?.onExportSave?() },
             onCopy: { [weak self] in self?.hideExportMenu(); self?.onExportCopy?() },
-            dragProvider: { [weak self] in self?.exportDragProvider?() }
+            dragProvider: { [weak self] in self?.exportDragProvider?() },
+            initialToggles: currentMetadataToggles?() ?? .allOff,
+            onMetadataChange: { [weak self] toggles, remember in
+                self?.onMetadataTogglesChanged?(toggles, remember)
+            }
         )
         let host = NSHostingView(rootView: view)
         addSubview(host)

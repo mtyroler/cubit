@@ -4,9 +4,14 @@ import AppKit
 final class OverlayController {
     let appState = AppState()
 
+    private let settings: SettingsStore
     private let permissions = PermissionsManager()
     private let captureService = ScreenCaptureService()
     private var onboarding: OnboardingWindow?
+
+    init(settings: SettingsStore) {
+        self.settings = settings
+    }
 
     private var windows: [OverlayWindow] = []
     private var session: MeasurementSession?
@@ -16,6 +21,12 @@ final class OverlayController {
 
     /// Snapshots captured at overlay entry, held until dismiss. M6's exporter consumes these.
     private(set) var capturedDisplays: [CapturedDisplay] = []
+
+    /// Persisted ("Remembered") metadata toggles — off by default. M6b.
+    private let metadataPreferences = MetadataPreferences()
+    /// A one-shot override from the current export panel session; cleared after each export
+    /// so the following export reverts to the persisted defaults.
+    private var pendingMetadataToggles: MetadataToggles?
 
     var isPresented: Bool { !windows.isEmpty }
 
@@ -67,8 +78,10 @@ final class OverlayController {
         let primaryDescriptor = descriptors[0]
         let session = MeasurementSession(
             screenReference: converter.canonicalFrame(of: primaryDescriptor),
-            scale: primaryDescriptor.scale
+            scale: primaryDescriptor.scale,
+            mode: settings.defaultReferenceMode
         )
+        session.tool = settings.defaultTool
         self.session = session
         appState.draftPercent = nil
 
@@ -130,6 +143,7 @@ final class OverlayController {
             canvas.provider = provider
             canvas.screenRects = screenRects
             canvas.excludedPID = excludedPID
+            canvas.dimOpacity = CGFloat(settings.dimOpacity)
             canvas.frozenImage = captured.first(where: { $0.displayID == descriptor.id })?.cgImage
             canvas.appState = appState
             canvas.onDismiss = { [weak self] in self?.dismiss() }
@@ -137,6 +151,12 @@ final class OverlayController {
             canvas.onExportSave = { [weak self] in self?.exportSave() }
             canvas.onExportCopy = { [weak self] in self?.exportCopy() }
             canvas.exportDragProvider = { [weak self] in self?.exportDragProvider() }
+            canvas.currentMetadataToggles = { [weak self] in self?.effectiveMetadataToggles ?? .allOff }
+            canvas.onMetadataTogglesChanged = { [weak self] toggles, remember in
+                guard let self else { return }
+                self.pendingMetadataToggles = toggles
+                if remember { self.metadataPreferences.save(toggles) }
+            }
             canvas.installHUD()
             canvas.installToolPill()
             window.contentView = canvas
@@ -195,13 +215,25 @@ final class OverlayController {
         (windows.first(where: { $0.isKeyWindow }) ?? windows.first)?.contentView as? OverlayCanvasView
     }
 
+    /// The toggles that would apply to an export started right now: a pending panel
+    /// selection if one exists, otherwise the persisted ("Remembered") defaults.
+    private var effectiveMetadataToggles: MetadataToggles {
+        pendingMetadataToggles ?? metadataPreferences.toggles
+    }
+
     private func currentExportPNG() -> Data? {
         guard let session,
               let captured = ExportRenderer.captured(for: session.resolved, in: capturedDisplays) else { return nil }
+        let toggles = effectiveMetadataToggles
+        // One-shot: the next export reverts to the persisted defaults unless this
+        // selection was "Remembered", in which case that's now the persisted default too.
+        pendingMetadataToggles = nil
+        let metadata = MetadataCollector.collect(toggles: toggles, reference: session.resolved, captured: captured)
         return ExportRenderer.renderPNG(
             measurements: session.measurements,
             reference: session.resolved,
-            captured: captured
+            captured: captured,
+            metadata: metadata
         )
     }
 
