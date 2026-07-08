@@ -59,6 +59,7 @@ final class OverlayController {
             canvas.onDismiss = { [weak self] in self?.dismiss() }
             canvas.onDraftChanged = { [weak self] in self?.updateAppState() }
             canvas.installHUD()
+            canvas.installToolPill()
             window.contentView = canvas
             window.setFrame(screen.frame, display: true)
             window.orderFrontRegardless()

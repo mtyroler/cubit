@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class OverlayCanvasView: NSView {
+final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var converter: CoordinateConverter?
     var display: DisplayDescriptor?
     var session: MeasurementSession?
@@ -12,10 +12,36 @@ final class OverlayCanvasView: NSView {
     var onDismiss: (() -> Void)?
     var onDraftChanged: (() -> Void)?
 
+    private struct HandleTarget {
+        var xEdge: RectEdge?
+        var yEdge: RectEdge?
+    }
+
+    private enum HitTarget {
+        case handle(UUID, HandleTarget)
+        case label(UUID)
+        case body(UUID)
+    }
+
+    private enum DragKind {
+        case move(UUID)
+        case resize(UUID, HandleTarget)
+    }
+
+    private struct ActiveDrag {
+        var kind: DragKind
+        var edited: Bool
+    }
+
     private var hudHost: NSHostingView<HUDView>?
+    private var toolPillHost: NSHostingView<ToolPillView>?
     private var trackingArea: NSTrackingArea?
     private var hovering = false
     private var lastCursor: CanonicalPoint?
+    private var activeDrag: ActiveDrag?
+    private var lastDragPoint: CanonicalPoint?
+    private var editingField: NSTextField?
+    private var editingMeasurementID: UUID?
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -28,10 +54,26 @@ final class OverlayCanvasView: NSView {
         hudHost = host
     }
 
+    func installToolPill() {
+        guard let session else { return }
+        let view = ToolPillView(
+            session: session,
+            onSelectTool: { [weak self] kind in self?.selectTool(kind) },
+            onCycleMode: { [weak self] in self?.cycleReferenceMode() },
+            onBeginCustomFrame: { [weak self] in self?.beginCustomFrame() },
+            onDismiss: { [weak self] in self?.onDismiss?() }
+        )
+        let host = NSHostingView(rootView: view)
+        addSubview(host)
+        toolPillHost = host
+        layoutToolPill()
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard window != nil else { return }
         resolveReference(at: canonicalMouseLocation())
+        layoutToolPill()
         refresh()
     }
 
@@ -61,10 +103,15 @@ final class OverlayCanvasView: NSView {
         drawCustomReference(session: session, converter: converter, display: display)
 
         for measurement in session.measurements {
-            drawMeasurement(kind: measurement.kind, rect: measurement.rect, converter: converter, display: display, active: false)
+            let color = Palette.color(forIndex: measurement.colorIndex).nsColor
+            drawMeasurement(kind: measurement.kind, rect: measurement.rect, converter: converter, display: display, color: color)
+            drawLabelPill(for: measurement, converter: converter, display: display, color: color)
+            if measurement.id == session.selectedID {
+                drawHandles(for: measurement, converter: converter, display: display, color: color)
+            }
         }
         if let rect = session.draftRect, let draft = session.draft {
-            drawMeasurement(kind: draft.kind, rect: rect, converter: converter, display: display, active: true)
+            drawMeasurement(kind: draft.kind, rect: rect, converter: converter, display: display, color: .controlAccentColor)
         }
     }
 
@@ -114,9 +161,8 @@ final class OverlayCanvasView: NSView {
         return CGRect(x: local.origin.x, y: local.origin.y, width: local.width, height: local.height)
     }
 
-    private func drawMeasurement(kind: MeasurementKind, rect: CanonicalRect, converter: CoordinateConverter, display: DisplayDescriptor, active: Bool) {
+    private func drawMeasurement(kind: MeasurementKind, rect: CanonicalRect, converter: CoordinateConverter, display: DisplayDescriptor, color: NSColor) {
         let frame = localRect(rect, converter: converter, display: display)
-        let color = NSColor.controlAccentColor
 
         switch kind {
         case .rectangle:
@@ -154,6 +200,120 @@ final class OverlayCanvasView: NSView {
             }
             cap.stroke()
         }
+    }
+
+    // MARK: Selection handles
+
+    private func handlePositions(for measurement: Measurement, frame: CGRect) -> [(HandleTarget, CGPoint)] {
+        switch measurement.kind {
+        case .rectangle:
+            return [
+                (HandleTarget(xEdge: .minX, yEdge: .minY), CGPoint(x: frame.minX, y: frame.minY)),
+                (HandleTarget(xEdge: .maxX, yEdge: .minY), CGPoint(x: frame.maxX, y: frame.minY)),
+                (HandleTarget(xEdge: .maxX, yEdge: .maxY), CGPoint(x: frame.maxX, y: frame.maxY)),
+                (HandleTarget(xEdge: .minX, yEdge: .maxY), CGPoint(x: frame.minX, y: frame.maxY))
+            ]
+        case .horizontal:
+            return [
+                (HandleTarget(xEdge: .minX, yEdge: nil), CGPoint(x: frame.minX, y: frame.minY)),
+                (HandleTarget(xEdge: .maxX, yEdge: nil), CGPoint(x: frame.maxX, y: frame.minY))
+            ]
+        case .vertical:
+            return [
+                (HandleTarget(xEdge: nil, yEdge: .minY), CGPoint(x: frame.minX, y: frame.minY)),
+                (HandleTarget(xEdge: nil, yEdge: .maxY), CGPoint(x: frame.minX, y: frame.maxY))
+            ]
+        }
+    }
+
+    private func drawHandles(for measurement: Measurement, converter: CoordinateConverter, display: DisplayDescriptor, color: NSColor) {
+        let frame = localRect(measurement.rect, converter: converter, display: display)
+        let size: CGFloat = 6
+        for (_, point) in handlePositions(for: measurement, frame: frame) {
+            let handleRect = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
+            NSColor.white.setFill()
+            NSBezierPath(rect: handleRect).fill()
+            color.setStroke()
+            let border = NSBezierPath(rect: handleRect)
+            border.lineWidth = 1.5
+            border.stroke()
+        }
+    }
+
+    // MARK: Label pills
+
+    private func labelString(for measurement: Measurement) -> NSAttributedString {
+        guard let session else { return NSAttributedString() }
+        let metrics = MeasurementEngine.metrics(for: measurement, reference: session.reference, scale: session.referenceScale)
+        let percent = String(format: "%.1f%%", metrics.primaryPercent)
+        let text = measurement.label.isEmpty ? percent : "\(percent) · \(measurement.label)"
+        return NSAttributedString(string: text, attributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: NSColor.white
+        ])
+    }
+
+    private func labelPillFrame(for measurement: Measurement, converter: CoordinateConverter, display: DisplayDescriptor) -> CGRect {
+        let frame = localRect(measurement.rect, converter: converter, display: display)
+        let textSize = labelString(for: measurement).size()
+        let padding = CGSize(width: 7, height: 4)
+        let pillSize = CGSize(width: textSize.width + padding.width * 2, height: textSize.height + padding.height * 2)
+        return CGRect(origin: labelOrigin(for: measurement.kind, frame: frame, pillSize: pillSize), size: pillSize)
+    }
+
+    private func labelOrigin(for kind: MeasurementKind, frame: CGRect, pillSize: CGSize) -> CGPoint {
+        switch kind {
+        case .rectangle:
+            let inset: CGFloat = 6
+            if frame.height >= pillSize.height + inset * 2, frame.width >= pillSize.width + inset * 2 {
+                return CGPoint(x: frame.minX + inset, y: frame.minY + inset)
+            }
+            return CGPoint(x: frame.minX, y: frame.minY - pillSize.height - 6)
+        case .horizontal:
+            return CGPoint(x: frame.midX - pillSize.width / 2, y: frame.minY - pillSize.height - 8)
+        case .vertical:
+            return CGPoint(x: frame.minX + 10, y: frame.midY - pillSize.height / 2)
+        }
+    }
+
+    private func drawLabelPill(for measurement: Measurement, converter: CoordinateConverter, display: DisplayDescriptor, color: NSColor) {
+        let pillRect = labelPillFrame(for: measurement, converter: converter, display: display)
+        guard bounds.intersects(pillRect) else { return }
+        let path = NSBezierPath(roundedRect: pillRect, xRadius: pillRect.height / 2, yRadius: pillRect.height / 2)
+        color.setFill()
+        path.fill()
+        let padding = CGSize(width: 7, height: 4)
+        labelString(for: measurement).draw(at: CGPoint(x: pillRect.minX + padding.width, y: pillRect.minY + padding.height))
+    }
+
+    // MARK: Hit testing
+
+    private func hitTest(at point: CanonicalPoint) -> HitTarget? {
+        guard let session, let converter, let display else { return nil }
+        let local = converter.displayLocal(point, on: display)
+        let localPoint = CGPoint(x: local.x, y: local.y)
+
+        if let selectedID = session.selectedID,
+           let measurement = session.measurements.first(where: { $0.id == selectedID }) {
+            let frame = localRect(measurement.rect, converter: converter, display: display)
+            let radius: CGFloat = 7
+            for (target, handlePoint) in handlePositions(for: measurement, frame: frame) {
+                if abs(localPoint.x - handlePoint.x) <= radius, abs(localPoint.y - handlePoint.y) <= radius {
+                    return .handle(measurement.id, target)
+                }
+            }
+        }
+
+        for measurement in session.measurements.reversed() {
+            if labelPillFrame(for: measurement, converter: converter, display: display).contains(localPoint) {
+                return .label(measurement.id)
+            }
+            let bodyFrame = localRect(measurement.rect, converter: converter, display: display).insetBy(dx: -5, dy: -5)
+            if bodyFrame.contains(localPoint) {
+                return .body(measurement.id)
+            }
+        }
+        return nil
     }
 
     // MARK: HUD positioning
@@ -198,6 +358,35 @@ final class OverlayCanvasView: NSView {
         hudHost.setFrameOrigin(CGPoint(x: x, y: y))
     }
 
+    private func layoutToolPill() {
+        guard let toolPillHost else { return }
+        toolPillHost.layoutSubtreeIfNeeded()
+        let size = toolPillHost.fittingSize
+        toolPillHost.setFrameSize(size)
+        let x = (bounds.width - size.width) / 2
+        let y = bounds.height - size.height - 24
+        toolPillHost.setFrameOrigin(CGPoint(x: x, y: y))
+    }
+
+    // MARK: Tool pill actions
+
+    private func selectTool(_ kind: MeasurementKind) {
+        session?.tool = kind
+        refresh()
+    }
+
+    private func cycleReferenceMode() {
+        guard let session else { return }
+        session.cycleMode()
+        resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
+        refresh()
+    }
+
+    private func beginCustomFrame() {
+        session?.beginCustomDraw()
+        refresh()
+    }
+
     // MARK: Reference resolution
 
     private func resolveReference(at cursor: CanonicalPoint?) {
@@ -208,6 +397,58 @@ final class OverlayCanvasView: NSView {
     private func canonicalMouseLocation() -> CanonicalPoint? {
         guard let converter else { return nil }
         return converter.canonical(fromCocoa: NSEvent.mouseLocation)
+    }
+
+    // MARK: Label editing
+
+    private func beginEditingLabel(for measurement: Measurement, converter: CoordinateConverter, display: DisplayDescriptor) {
+        let pillFrame = labelPillFrame(for: measurement, converter: converter, display: display)
+        let field = NSTextField(frame: pillFrame.insetBy(dx: -4, dy: -3))
+        field.stringValue = measurement.label
+        field.placeholderString = "Label"
+        field.font = .systemFont(ofSize: 12, weight: .medium)
+        field.bezelStyle = .roundedBezel
+        field.delegate = self
+        addSubview(field)
+        window?.makeFirstResponder(field)
+        field.currentEditor()?.selectAll(nil)
+        editingField = field
+        editingMeasurementID = measurement.id
+    }
+
+    private func commitLabelEdit() {
+        guard let session, let id = editingMeasurementID, let field = editingField else { return }
+        session.setLabel(field.stringValue, for: id)
+        endLabelEdit()
+    }
+
+    private func cancelLabelEdit() {
+        endLabelEdit()
+    }
+
+    private func endLabelEdit() {
+        editingField?.removeFromSuperview()
+        editingField = nil
+        editingMeasurementID = nil
+        window?.makeFirstResponder(self)
+        refresh()
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+            commitLabelEdit()
+            return true
+        }
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            cancelLabelEdit()
+            return true
+        }
+        return false
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard editingField != nil else { return }
+        commitLabelEdit()
     }
 
     // MARK: Keyboard
@@ -224,7 +465,8 @@ final class OverlayCanvasView: NSView {
 
         switch event.keyCode {
         case 53: // Esc
-            if session.isDrawingCustom { session.isDrawingCustom = false; session.customDraft = nil; refresh() }
+            if session.selectedID != nil { session.select(nil); refresh() }
+            else if session.isDrawingCustom { session.isDrawingCustom = false; session.customDraft = nil; refresh() }
             else if session.draft != nil { session.cancelDraft(); refresh() }
             else { onDismiss?() }
             return
@@ -232,9 +474,10 @@ final class OverlayCanvasView: NSView {
             if session.draft != nil { session.commitDraft(); refresh() }
             return
         case 48: // Tab — cycle reference mode
-            session.cycleMode()
-            resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
-            refresh()
+            cycleReferenceMode()
+            return
+        case 51, 117: // Delete / forward delete
+            if session.selectedID != nil { session.deleteSelected(); refresh() }
             return
         case 123, 124, 125, 126: // arrows
             handleArrow(keyCode: event.keyCode, resize: modifiers.contains(.option), large: modifiers.contains(.shift))
@@ -244,39 +487,36 @@ final class OverlayCanvasView: NSView {
         }
 
         switch characters {
-        case "r": session.tool = .rectangle; refresh()
-        case "h": session.tool = .horizontal; refresh()
-        case "v": session.tool = .vertical; refresh()
-        case "c": session.beginCustomDraw(); refresh()
+        case "r": selectTool(.rectangle)
+        case "h": selectTool(.horizontal)
+        case "v": selectTool(.vertical)
+        case "c": beginCustomFrame()
         default: super.keyDown(with: event)
         }
     }
 
     private func handleArrow(keyCode: UInt16, resize: Bool, large: Bool) {
-        guard let session, session.draft == nil, !session.measurements.isEmpty else { return }
+        guard let session, session.draft == nil, session.selectedID != nil else { return }
         let step: CGFloat = large ? 10 : 1
-        let index = session.measurements.count - 1
-        var measurement = session.measurements[index]
 
         if resize {
             switch keyCode {
-            case 123: measurement.rect = MeasurementEngine.resized(measurement.rect, edge: .maxX, by: -step)
-            case 124: measurement.rect = MeasurementEngine.resized(measurement.rect, edge: .maxX, by: step)
-            case 126: measurement.rect = MeasurementEngine.resized(measurement.rect, edge: .maxY, by: -step)
-            case 125: measurement.rect = MeasurementEngine.resized(measurement.rect, edge: .maxY, by: step)
+            case 123: session.resizeSelected(edge: .maxX, by: -step)
+            case 124: session.resizeSelected(edge: .maxX, by: step)
+            case 126: session.resizeSelected(edge: .maxY, by: -step)
+            case 125: session.resizeSelected(edge: .maxY, by: step)
             default: break
             }
         } else {
             switch keyCode {
-            case 123: measurement.rect = MeasurementEngine.moved(measurement.rect, dx: -step, dy: 0)
-            case 124: measurement.rect = MeasurementEngine.moved(measurement.rect, dx: step, dy: 0)
-            case 126: measurement.rect = MeasurementEngine.moved(measurement.rect, dx: 0, dy: -step)
-            case 125: measurement.rect = MeasurementEngine.moved(measurement.rect, dx: 0, dy: step)
+            case 123: session.nudgeSelected(dx: -step, dy: 0)
+            case 124: session.nudgeSelected(dx: step, dy: 0)
+            case 126: session.nudgeSelected(dx: 0, dy: -step)
+            case 125: session.nudgeSelected(dx: 0, dy: step)
             default: break
             }
         }
 
-        session.measurements[index] = measurement
         refresh()
     }
 
@@ -301,11 +541,45 @@ final class OverlayCanvasView: NSView {
         guard let session, let point = canonicalLocation(of: event) else { return }
         lastCursor = point
 
+        if editingField != nil { commitLabelEdit() }
+
         if session.isDrawingCustom {
             session.beginCustomDraft(at: point)
             refresh()
             return
         }
+
+        if let hit = hitTest(at: point) {
+            switch hit {
+            case .handle(let id, let target):
+                session.select(id)
+                activeDrag = ActiveDrag(kind: .resize(id, target), edited: false)
+                lastDragPoint = point
+                refresh()
+                return
+            case .label(let id):
+                session.select(id)
+                if event.clickCount >= 2,
+                   let measurement = session.measurements.first(where: { $0.id == id }),
+                   let converter, let display {
+                    beginEditingLabel(for: measurement, converter: converter, display: display)
+                    refresh()
+                    return
+                }
+                activeDrag = ActiveDrag(kind: .move(id), edited: false)
+                lastDragPoint = point
+                refresh()
+                return
+            case .body(let id):
+                session.select(id)
+                activeDrag = ActiveDrag(kind: .move(id), edited: false)
+                lastDragPoint = point
+                refresh()
+                return
+            }
+        }
+
+        session.select(nil)
 
         // Pin the reference for the whole draft — resolve once, here.
         resolveReference(at: point)
@@ -317,6 +591,14 @@ final class OverlayCanvasView: NSView {
     override func mouseDragged(with event: NSEvent) {
         guard let session, let point = canonicalLocation(of: event) else { return }
         lastCursor = point
+
+        if let drag = activeDrag {
+            if !drag.edited { session.beginTransientEdit(); activeDrag?.edited = true }
+            applyDrag(drag.kind, to: point, session: session)
+            lastDragPoint = point
+            refresh()
+            return
+        }
 
         if session.customDraft != nil {
             session.updateCustomDraft(to: point)
@@ -332,6 +614,13 @@ final class OverlayCanvasView: NSView {
         guard let session, let point = canonicalLocation(of: event) else { return }
         lastCursor = point
 
+        if activeDrag != nil {
+            activeDrag = nil
+            lastDragPoint = nil
+            refresh()
+            return
+        }
+
         if session.customDraft != nil {
             session.updateCustomDraft(to: point)
             session.commitCustomDraft()
@@ -343,6 +632,23 @@ final class OverlayCanvasView: NSView {
         session.updateDraft(to: point, constrain: event.modifierFlags.contains(.shift), fromCenter: event.modifierFlags.contains(.option))
         session.commitDraft()
         refresh()
+    }
+
+    private func applyDrag(_ kind: DragKind, to point: CanonicalPoint, session: MeasurementSession) {
+        guard let lastDragPoint else { return }
+        let dx = point.x - lastDragPoint.x
+        let dy = point.y - lastDragPoint.y
+
+        switch kind {
+        case .move(let id):
+            guard let measurement = session.measurements.first(where: { $0.id == id }) else { return }
+            session.updateSelectedRect(MeasurementEngine.moved(measurement.rect, dx: dx, dy: dy))
+        case .resize(let id, let target):
+            guard var rect = session.measurements.first(where: { $0.id == id })?.rect else { return }
+            if let xEdge = target.xEdge { rect = MeasurementEngine.resized(rect, edge: xEdge, by: dx) }
+            if let yEdge = target.yEdge { rect = MeasurementEngine.resized(rect, edge: yEdge, by: dy) }
+            session.updateSelectedRect(rect)
+        }
     }
 
     private func canonicalLocation(of event: NSEvent) -> CanonicalPoint? {

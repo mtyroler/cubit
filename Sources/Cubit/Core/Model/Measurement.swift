@@ -5,11 +5,13 @@ struct Measurement: Identifiable, Equatable, Sendable {
     var kind: MeasurementKind
     var rect: CanonicalRect
     var label: String
+    var colorIndex: Int
 
-    init(id: UUID = UUID(), kind: MeasurementKind, rect: CanonicalRect, label: String = "") {
+    init(id: UUID = UUID(), kind: MeasurementKind, rect: CanonicalRect, label: String = "", colorIndex: Int = 0) {
         self.id = id
         self.kind = kind
         self.rect = rect
         self.label = label
+        self.colorIndex = colorIndex
     }
 }

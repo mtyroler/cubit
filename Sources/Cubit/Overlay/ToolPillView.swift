@@ -1,0 +1,102 @@
+import SwiftUI
+
+struct ToolPillView: View {
+    let session: MeasurementSession
+    var onSelectTool: (MeasurementKind) -> Void
+    var onCycleMode: () -> Void
+    var onBeginCustomFrame: () -> Void
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            toolButton("rectangle.dashed", hint: "R", kind: .rectangle)
+            toolButton("arrow.left.and.right", hint: "H", kind: .horizontal)
+            toolButton("arrow.up.and.down", hint: "V", kind: .vertical)
+
+            divider
+
+            pillButton(action: onCycleMode) {
+                HStack(spacing: 5) {
+                    Image(systemName: modeSymbol)
+                        .font(.system(size: 12, weight: .medium))
+                    Text(modeName)
+                        .font(.system(size: 11, weight: .medium))
+                    hintTag("⇥")
+                }
+            }
+
+            pillButton(action: onBeginCustomFrame) {
+                HStack(spacing: 5) {
+                    Image(systemName: "crop")
+                        .font(.system(size: 12, weight: .medium))
+                    hintTag("C")
+                }
+            }
+
+            divider
+
+            pillButton(action: onDismiss) {
+                HStack(spacing: 5) {
+                    Text("Done")
+                        .font(.system(size: 11, weight: .medium))
+                    hintTag("esc")
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .fixedSize()
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(.tertiary)
+            .frame(width: 1, height: 20)
+    }
+
+    private func toolButton(_ symbol: String, hint: String, kind: MeasurementKind) -> some View {
+        let active = session.tool == kind
+        return pillButton(action: { onSelectTool(kind) }) {
+            VStack(spacing: 2) {
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: active ? .semibold : .regular))
+                hintTag(hint)
+            }
+        }
+        .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary))
+        .background(active ? AnyShapeStyle(Color.accentColor.opacity(0.15)) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func pillButton<Content: View>(action: @escaping () -> Void, @ViewBuilder content: () -> Content) -> some View {
+        Button(action: action) {
+            content()
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func hintTag(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 8, weight: .semibold))
+            .foregroundStyle(.tertiary)
+    }
+
+    private var modeSymbol: String {
+        switch session.mode {
+        case .windowUnderCursor: return "macwindow"
+        case .screen: return "display"
+        case .custom: return "rectangle.dashed"
+        }
+    }
+
+    private var modeName: String {
+        switch session.mode {
+        case .windowUnderCursor: return "Window"
+        case .screen: return "Screen"
+        case .custom: return "Custom"
+        }
+    }
+}

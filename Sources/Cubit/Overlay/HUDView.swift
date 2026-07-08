@@ -19,7 +19,6 @@ struct HUDView: View {
             scale: session.referenceScale
         )
         return VStack(alignment: .leading, spacing: 4) {
-            toolGlyphs(active: draft.kind)
             Text(primaryLine(kind: draft.kind, rect: rect, metrics: metrics))
                 .font(.system(size: 12, weight: .medium).monospacedDigit())
             referenceLine()
@@ -40,20 +39,6 @@ struct HUDView: View {
             .background(.regularMaterial, in: Capsule())
             .opacity(faded ? 0.85 : 1)
             .fixedSize()
-    }
-
-    private func toolGlyphs(active: MeasurementKind) -> some View {
-        HStack(spacing: 8) {
-            glyph("rectangle.dashed", kind: .rectangle, active: active)
-            glyph("arrow.left.and.right", kind: .horizontal, active: active)
-            glyph("arrow.up.and.down", kind: .vertical, active: active)
-        }
-    }
-
-    private func glyph(_ name: String, kind: MeasurementKind, active: MeasurementKind) -> some View {
-        Image(systemName: name)
-            .font(.system(size: 10, weight: kind == active ? .semibold : .regular))
-            .foregroundStyle(kind == active ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
     }
 
     private func primaryLine(kind: MeasurementKind, rect: CanonicalRect, metrics: Metrics) -> String {

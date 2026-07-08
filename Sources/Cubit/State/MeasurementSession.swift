@@ -27,8 +27,10 @@ final class MeasurementSession {
     var tool: MeasurementKind = .rectangle
     var measurements: [Measurement] = []
     var draft: Draft?
+    var selectedID: UUID?
 
     private let fallbackRect: CanonicalRect
+    private var undoStack: [[Measurement]] = []
 
     init(screenReference: CanonicalRect, scale: CGFloat, mode: ReferenceMode = .windowUnderCursor) {
         self.fallbackRect = screenReference
@@ -124,8 +126,10 @@ final class MeasurementSession {
         let dy = draft.current.y - draft.anchor.y
         guard (dx * dx + dy * dy).squareRoot() >= minDrag else { return nil }
 
-        let measurement = Measurement(kind: draft.kind, rect: rect)
+        pushUndo()
+        let measurement = Measurement(kind: draft.kind, rect: rect, colorIndex: nextColorIndex())
         measurements.append(measurement)
+        selectedID = measurement.id
         return measurement
     }
 
@@ -160,7 +164,71 @@ final class MeasurementSession {
     }
 
     func undo() {
-        guard !measurements.isEmpty else { return }
-        measurements.removeLast()
+        guard let previous = undoStack.popLast() else { return }
+        measurements = previous
+        if let selectedID, !measurements.contains(where: { $0.id == selectedID }) {
+            self.selectedID = nil
+        }
+    }
+
+    // MARK: Color assignment
+
+    private func nextColorIndex() -> Int {
+        let used = Set(measurements.map(\.colorIndex))
+        var index = 0
+        while used.contains(index) { index += 1 }
+        return index
+    }
+
+    // MARK: Selection & editing
+
+    var selectedMeasurement: Measurement? {
+        guard let selectedID else { return nil }
+        return measurements.first { $0.id == selectedID }
+    }
+
+    func select(_ id: UUID?) {
+        selectedID = id
+    }
+
+    /// Call once at the start of an interactive drag/nudge sequence so the whole
+    /// gesture collapses into a single undo step.
+    func beginTransientEdit() {
+        pushUndo()
+    }
+
+    func updateSelectedRect(_ rect: CanonicalRect) {
+        guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
+        measurements[index].rect = rect
+    }
+
+    func nudgeSelected(dx: CGFloat, dy: CGFloat) {
+        guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
+        pushUndo()
+        measurements[index].rect = MeasurementEngine.moved(measurements[index].rect, dx: dx, dy: dy)
+    }
+
+    func resizeSelected(edge: RectEdge, by delta: CGFloat) {
+        guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
+        pushUndo()
+        measurements[index].rect = MeasurementEngine.resized(measurements[index].rect, edge: edge, by: delta)
+    }
+
+    func deleteSelected() {
+        guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
+        pushUndo()
+        measurements.remove(at: index)
+        self.selectedID = nil
+    }
+
+    func setLabel(_ label: String, for id: UUID) {
+        guard let index = measurements.firstIndex(where: { $0.id == id }) else { return }
+        pushUndo()
+        measurements[index].label = label
+    }
+
+    private func pushUndo() {
+        undoStack.append(measurements)
+        if undoStack.count > 50 { undoStack.removeFirst() }
     }
 }
