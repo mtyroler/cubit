@@ -5,7 +5,7 @@ struct CubitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("Cubit", systemImage: "ruler") {
+        MenuBarExtra {
             Button {
                 appDelegate.overlayController.toggle()
             } label: {
@@ -23,6 +23,12 @@ struct CubitApp: App {
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")
+        } label: {
+            if let percent = appDelegate.overlayController.appState.draftPercent {
+                Text(percent)
+            } else {
+                Image(systemName: "ruler")
+            }
         }
         .menuBarExtraStyle(.menu)
 
