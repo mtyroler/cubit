@@ -145,6 +145,9 @@ final class OverlayController {
             canvas.excludedPID = excludedPID
             canvas.dimOpacity = CGFloat(settings.dimOpacity)
             canvas.frozenImage = captured.first(where: { $0.displayID == descriptor.id })?.cgImage
+            // Top inset = this screen's menu-bar height; excluded from the frozen draw so the
+            // live menu bar (rendered above the overlay) isn't ghosted by a frozen copy.
+            canvas.topInset = max(0, screen.frame.maxY - screen.visibleFrame.maxY)
             canvas.appState = appState
             canvas.onDismiss = { [weak self] in self?.dismiss() }
             canvas.onDraftChanged = { [weak self] in self?.updateAppState() }

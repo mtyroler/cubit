@@ -8,6 +8,8 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var session: MeasurementSession?
     var appState: AppState?
     var frozenImage: CGImage? { didSet { needsDisplay = true } }
+    /// Height of the menu-bar strip (points) to leave unfrozen at the top of this display.
+    var topInset: CGFloat = 0
     var provider: WindowInfoProviding?
     var screenRects: [CanonicalRect] = []
     var excludedPID: pid_t = 0
@@ -134,13 +136,26 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
     private func drawFrozenBackground() {
         guard let frozenImage, let ctx = NSGraphicsContext.current?.cgContext else { return }
+
+        let scale = display?.scale ?? (bounds.width > 0 ? CGFloat(frozenImage.width) / bounds.width : 1)
+        let layout = FrozenBackgroundLayout.layout(
+            imagePixelWidth: CGFloat(frozenImage.width),
+            imagePixelHeight: CGFloat(frozenImage.height),
+            scale: scale,
+            canvasSize: bounds.size,
+            topInsetPoints: topInset
+        )
+        guard !layout.isEmpty, let cropped = frozenImage.cropping(to: layout.sourcePixelRect) else { return }
+
         // The view is flipped (top-left origin); a CGImage drawn straight into it comes out
-        // upside down. Invert the y-axis over the view's own bounds before drawing so the
-        // snapshot fills this display's canvas the right way up.
+        // upside down. Invert the y-axis over the destination strip so the snapshot fills its
+        // region the right way up. The menu-bar strip above `topInset` is left to the dim only,
+        // so the live menu bar (always drawn on top) isn't ghosted by a frozen copy.
+        let dest = layout.destPointRect
         ctx.saveGState()
-        ctx.translateBy(x: 0, y: bounds.height)
+        ctx.translateBy(x: 0, y: dest.maxY)
         ctx.scaleBy(x: 1, y: -1)
-        ctx.draw(frozenImage, in: CGRect(origin: .zero, size: bounds.size))
+        ctx.draw(cropped, in: CGRect(x: dest.minX, y: 0, width: dest.width, height: dest.height))
         ctx.restoreGState()
     }
 
