@@ -33,7 +33,7 @@ final class HotkeyManager {
 
     private static let signature: OSType = 0x43424954 // 'CBIT'
     private static let defaultKeyCode = UInt32(kVK_ANSI_M)
-    private static let defaultModifiers = UInt32(optionKey | cmdKey)
+    private static let defaultModifiers = UInt32(controlKey | optionKey | cmdKey)
 
     private let controller: OverlayController
     private let hotKeyID = EventHotKeyID(signature: signature, id: 1)

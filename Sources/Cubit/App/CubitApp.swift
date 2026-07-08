@@ -11,7 +11,7 @@ struct CubitApp: App {
             } label: {
                 Label("Measure", systemImage: "ruler")
             }
-            .keyboardShortcut("m", modifiers: [.option, .command])
+            .keyboardShortcut("m", modifiers: [.control, .option, .command])
 
             Divider()
 
