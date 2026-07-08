@@ -258,9 +258,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
     private func labelString(for measurement: Measurement) -> NSAttributedString {
         guard let session else { return NSAttributedString() }
-        let metrics = MeasurementEngine.metrics(for: measurement, reference: session.reference, scale: session.referenceScale)
-        let percent = String(format: "%.1f%%", metrics.primaryPercent)
-        let text = measurement.label.isEmpty ? percent : "\(percent) · \(measurement.label)"
+        let text = MeasurementLabel.text(for: measurement, reference: session.reference, scale: session.referenceScale)
         return NSAttributedString(string: text, attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: NSColor.white
