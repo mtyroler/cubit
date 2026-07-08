@@ -380,7 +380,41 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     /// with the tool pill/HUD/export menu/label-edit text field sitting on top.
     override func resetCursorRects() {
         super.resetCursorRects()
+
+        // During an active drag, lock the whole view to the drag affordance so the cursor
+        // doesn't flip back to the tool cursor as the pointer leaves the grabbed shape.
+        if let drag = activeDrag {
+            addCursorRect(bounds, cursor: dragCursor(for: drag.kind))
+            return
+        }
+
         addCursorRect(bounds, cursor: currentToolCursor())
+
+        // Edit affordances layered over the tool cursor: hovering an existing measurement's
+        // body / label / resize handle should read as move / click / resize, not the active
+        // draw tool. Later cursor rects win where they overlap, so bodies go down first and
+        // the smaller handles on top. Suppressed while placing a new measurement or the custom
+        // reference — that's a draw gesture, not an edit.
+        guard let session, session.draft == nil, session.customDraft == nil, !session.isDrawingCustom,
+              let converter, let display else { return }
+
+        for measurement in session.measurements {
+            let body = localRect(measurement.rect, converter: converter, display: display).insetBy(dx: -5, dy: -5)
+            addCursorRect(body, cursor: .openHand)
+            if showLabelPills {
+                addCursorRect(labelPillFrame(for: measurement, converter: converter, display: display), cursor: .pointingHand)
+            }
+        }
+
+        if let selectedID = session.selectedID,
+           let measurement = session.measurements.first(where: { $0.id == selectedID }) {
+            let frame = localRect(measurement.rect, converter: converter, display: display)
+            let radius: CGFloat = 7
+            for (target, point) in handlePositions(for: measurement, frame: frame) {
+                let rect = CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)
+                addCursorRect(rect, cursor: resizeCursor(for: target))
+            }
+        }
     }
 
     private func currentToolCursor() -> NSCursor {
@@ -391,13 +425,67 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         return ToolCursorFactory.cursor(for: style)
     }
 
+    /// The edit-affordance cursor for the point under the pointer, or nil when it isn't over
+    /// an editable region (caller falls back to the tool cursor). Mirrors `resetCursorRects`
+    /// but resolves to a single cursor for the immediate `.set()`.
+    private func editCursor() -> NSCursor? {
+        guard let session else { return nil }
+        if let drag = activeDrag { return dragCursor(for: drag.kind) }
+        guard session.draft == nil, session.customDraft == nil, !session.isDrawingCustom,
+              let lastCursor else { return nil }
+        switch hitTest(at: lastCursor) {
+        case .handle(_, let target): return resizeCursor(for: target)
+        case .label: return .pointingHand
+        case .body: return .openHand
+        case .none: return nil
+        }
+    }
+
+    private func dragCursor(for kind: DragKind) -> NSCursor {
+        switch kind {
+        case .move: return .closedHand
+        case .resize(_, let target): return resizeCursor(for: target)
+        }
+    }
+
+    /// Directional resize cursor for a handle: horizontal for a line endpoint that moves in x,
+    /// vertical for one that moves in y, and a diagonal for a rectangle corner (both edges).
+    /// The diagonal uses AppKit's private window-resize cursors when available, falling back to
+    /// the horizontal resize cursor.
+    private func resizeCursor(for target: HandleTarget) -> NSCursor {
+        switch (target.xEdge, target.yEdge) {
+        case (.some, .some(let yEdge)):
+            let nwse = (target.xEdge == .minX) == (yEdge == .minY)
+            return Self.diagonalResizeCursor(nwse: nwse) ?? .resizeLeftRight
+        case (.some, .none):
+            return .resizeLeftRight
+        case (.none, .some):
+            return .resizeUpDown
+        case (.none, .none):
+            return .openHand
+        }
+    }
+
+    private static func diagonalResizeCursor(nwse: Bool) -> NSCursor? {
+        let selectorName = nwse
+            ? "_windowResizeNorthWestSouthEastCursor"
+            : "_windowResizeNorthEastSouthWestCursor"
+        let selector = NSSelectorFromString(selectorName)
+        let cursorClass = NSCursor.self as AnyObject
+        guard cursorClass.responds(to: selector),
+              let cursor = cursorClass.perform(selector)?.takeUnretainedValue() as? NSCursor else {
+            return nil
+        }
+        return cursor
+    }
+
     /// Cursor rects only get re-evaluated by AppKit on the next opportunity
     /// (mouse enter, resize, …); invalidate on every state change so a tool/mode
     /// switch is reflected right away, and force it immediately if the pointer is
     /// already inside our bounds rather than waiting for the next mouse event.
     private func updateCursor() {
         window?.invalidateCursorRects(for: self)
-        if hovering { currentToolCursor().set() }
+        if hovering { (editCursor() ?? currentToolCursor()).set() }
     }
 
     // MARK: HUD positioning
