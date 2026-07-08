@@ -19,7 +19,7 @@ struct CubitApp: App {
                 .keyboardShortcut(",", modifiers: [.command])
 
             Button("About Cubit") {
-                NSApplication.shared.orderFrontStandardAboutPanel(nil)
+                AboutPanel.show()
             }
 
             Divider()
@@ -41,6 +41,43 @@ struct CubitApp: App {
         Settings {
             SettingsView(settings: appDelegate.settings, hotkeyManager: appDelegate.hotkeyManager)
         }
+    }
+}
+
+/// Shows the standard About panel for an `LSUIElement` (accessory) app. Two problems to solve:
+/// `orderFrontStandardAboutPanel` alone opens the panel behind every other app (Cubit is never
+/// frontmost by default), and — because the panel lives in Cubit's normal space — it never appears
+/// over another app running full screen (a Zoom call, say), so it looks like nothing happened.
+/// Activating surfaces it; giving the panel `.canJoinAllSpaces` lets it render in whatever space is
+/// active, including a full-screen app's. The deferred block covers the menu dismissal re-deactivating
+/// the app the instant the panel appears.
+private enum AboutPanel {
+    @MainActor
+    static func show() {
+        let before = Set(NSApp.windows.map(ObjectIdentifier.init))
+        NSApp.orderFrontStandardAboutPanel(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            guard let panel = aboutPanel(newSince: before) else { return }
+            // Persisted on the reused singleton, so later opens inherit it too.
+            panel.collectionBehavior.insert(.canJoinAllSpaces)
+            panel.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    /// The about panel is a reused singleton: on first open it's the freshly-added window; on later
+    /// opens it's the visible window titled for the app (title fallback for when the diff is empty).
+    @MainActor
+    private static func aboutPanel(newSince before: Set<ObjectIdentifier>) -> NSWindow? {
+        if let fresh = NSApp.windows.first(where: { !before.contains(ObjectIdentifier($0)) }) {
+            return fresh
+        }
+        return NSApp.windows.first { $0.isVisible && ($0.title == "About \(appName)" || $0.title == appName) }
+    }
+
+    private static var appName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Cubit"
     }
 }
 
