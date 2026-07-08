@@ -32,8 +32,8 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var onExportCopy: (() -> Void)?
     var exportDragProvider: (() -> NSItemProvider?)?
     var currentMetadataToggles: (() -> MetadataToggles)?
-    var currentIncludeContext: (() -> Bool)?
-    var onMetadataTogglesChanged: ((MetadataToggles, Bool, Bool) -> Void)?
+    var currentFraming: (() -> ExportFraming)?
+    var onMetadataTogglesChanged: ((MetadataToggles, ExportFraming, Bool) -> Void)?
 
     private struct HandleTarget {
         var xEdge: RectEdge?
@@ -468,9 +468,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             onCopy: { [weak self] in self?.hideExportMenu(); self?.onExportCopy?() },
             dragProvider: { [weak self] in self?.exportDragProvider?() },
             initialToggles: currentMetadataToggles?() ?? .allOff,
-            initialIncludeContext: currentIncludeContext?() ?? false,
-            onMetadataChange: { [weak self] toggles, includeContext, remember in
-                self?.onMetadataTogglesChanged?(toggles, includeContext, remember)
+            initialFraming: currentFraming?() ?? .default,
+            onMetadataChange: { [weak self] toggles, framing, remember in
+                self?.onMetadataTogglesChanged?(toggles, framing, remember)
             }
         )
         let host = NSHostingView(rootView: view)

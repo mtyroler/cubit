@@ -19,6 +19,7 @@ enum ExportRenderer {
         reference: ResolvedReference,
         captured: CapturedDisplay,
         includeContext: Bool = false,
+        windowShadow: Bool = true,
         metadata: ExportMetadata = ExportMetadata()
     ) -> CGImage? {
         let scale = captured.scale
@@ -59,11 +60,24 @@ enum ExportRenderer {
         )
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
-        let view = ScreenshotAnnotationView(layout: layout, image: cropped)
-        let renderer = ImageRenderer(content: view)
+        // Native-window styling (rounded corners + shadow in transparent margins) applies to
+        // an exact window crop only — never a padded context shot or a screen/custom region.
+        let styled = windowStyled(mode: reference.mode, includeContext: includeContext, windowShadow: windowShadow)
+        if styled {
+            let renderer = ImageRenderer(content: StyledWindowExportView(layout: layout, image: cropped))
+            renderer.scale = scale
+            renderer.isOpaque = false
+            return renderer.cgImage
+        }
+        let renderer = ImageRenderer(content: ScreenshotAnnotationView(layout: layout, image: cropped))
         renderer.scale = scale
         renderer.isOpaque = true
         return renderer.cgImage
+    }
+
+    /// Native-window styling is on only for an exact window crop with the shadow toggle on.
+    static func windowStyled(mode: ReferenceMode, includeContext: Bool, windowShadow: Bool) -> Bool {
+        mode == .windowUnderCursor && !includeContext && windowShadow
     }
 
     /// Renders and encodes to metadata-free PNG data. "Metadata-free" refers to the PNG
@@ -74,6 +88,7 @@ enum ExportRenderer {
         reference: ResolvedReference,
         captured: CapturedDisplay,
         includeContext: Bool = false,
+        windowShadow: Bool = true,
         metadata: ExportMetadata = ExportMetadata()
     ) -> Data? {
         guard let image = renderCGImage(
@@ -81,6 +96,7 @@ enum ExportRenderer {
             reference: reference,
             captured: captured,
             includeContext: includeContext,
+            windowShadow: windowShadow,
             metadata: metadata
         ) else {
             return nil

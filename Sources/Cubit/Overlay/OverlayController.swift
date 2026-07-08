@@ -24,12 +24,12 @@ final class OverlayController {
 
     /// Persisted ("Remembered") metadata toggles — off by default. M6b.
     private let metadataPreferences = MetadataPreferences()
-    /// Persisted ("Remembered") export framing — window-only by default.
+    /// Persisted ("Remembered") export framing — window-only, shadow on, by default.
     private let layoutPreferences = ExportLayoutPreferences()
     /// One-shot overrides from the current export panel session; cleared after each export
     /// so the following export reverts to the persisted defaults.
     private var pendingMetadataToggles: MetadataToggles?
-    private var pendingIncludeContext: Bool?
+    private var pendingFraming: ExportFraming?
 
     var isPresented: Bool { !windows.isEmpty }
 
@@ -166,14 +166,14 @@ final class OverlayController {
             canvas.onExportCopy = { [weak self] in self?.exportCopy() }
             canvas.exportDragProvider = { [weak self] in self?.exportDragProvider() }
             canvas.currentMetadataToggles = { [weak self] in self?.effectiveMetadataToggles ?? .allOff }
-            canvas.currentIncludeContext = { [weak self] in self?.effectiveIncludeContext ?? false }
-            canvas.onMetadataTogglesChanged = { [weak self] toggles, includeContext, remember in
+            canvas.currentFraming = { [weak self] in self?.effectiveFraming ?? .default }
+            canvas.onMetadataTogglesChanged = { [weak self] toggles, framing, remember in
                 guard let self else { return }
                 self.pendingMetadataToggles = toggles
-                self.pendingIncludeContext = includeContext
+                self.pendingFraming = framing
                 if remember {
                     self.metadataPreferences.save(toggles)
-                    self.layoutPreferences.includeContext = includeContext
+                    self.layoutPreferences.save(framing)
                 }
             }
             canvas.installHUD()
@@ -242,25 +242,26 @@ final class OverlayController {
 
     /// The framing that would apply to an export started right now: a pending panel
     /// selection if one exists, otherwise the persisted ("Remembered") default.
-    private var effectiveIncludeContext: Bool {
-        pendingIncludeContext ?? layoutPreferences.includeContext
+    private var effectiveFraming: ExportFraming {
+        pendingFraming ?? layoutPreferences.framing
     }
 
     private func currentExportPNG() -> Data? {
         guard let session,
               let captured = ExportRenderer.captured(for: session.resolved, in: capturedDisplays) else { return nil }
         let toggles = effectiveMetadataToggles
-        let includeContext = effectiveIncludeContext
+        let framing = effectiveFraming
         // One-shot: the next export reverts to the persisted defaults unless this
         // selection was "Remembered", in which case that's now the persisted default too.
         pendingMetadataToggles = nil
-        pendingIncludeContext = nil
+        pendingFraming = nil
         let metadata = MetadataCollector.collect(toggles: toggles, reference: session.resolved, captured: captured)
         return ExportRenderer.renderPNG(
             measurements: session.measurements,
             reference: session.resolved,
             captured: captured,
-            includeContext: includeContext,
+            includeContext: framing.includeContext,
+            windowShadow: framing.windowShadow,
             metadata: metadata
         )
     }

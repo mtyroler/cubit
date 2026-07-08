@@ -94,4 +94,30 @@ final class ExportRendererTests: XCTestCase {
         XCTAssertEqual(ExportRenderer.cropRect(reference: reference, displayFrame: display, includeContext: false), display)
         XCTAssertEqual(ExportRenderer.cropRect(reference: reference, displayFrame: display, includeContext: true), display)
     }
+
+    // Native-window styling only applies to an exact window crop with the shadow on.
+    func testWindowStylingOnlyForExactWindowWithShadow() {
+        XCTAssertTrue(ExportRenderer.windowStyled(mode: .windowUnderCursor, includeContext: false, windowShadow: true))
+        XCTAssertFalse(ExportRenderer.windowStyled(mode: .windowUnderCursor, includeContext: false, windowShadow: false), "shadow toggle off")
+        XCTAssertFalse(ExportRenderer.windowStyled(mode: .windowUnderCursor, includeContext: true, windowShadow: true), "context shot is not a clean window")
+        XCTAssertFalse(ExportRenderer.windowStyled(mode: .screen, includeContext: false, windowShadow: true), "screen is full-bleed")
+        XCTAssertFalse(ExportRenderer.windowStyled(mode: .custom, includeContext: false, windowShadow: true), "custom is an arbitrary region")
+    }
+
+    func testFramingPreferenceDefaultsShadowOnContextOff() {
+        let suite = UserDefaults(suiteName: "cubit.test.\(UUID().uuidString)")!
+        let prefs = ExportLayoutPreferences(defaults: suite)
+        XCTAssertTrue(prefs.windowShadow, "window shadow defaults on")
+        XCTAssertFalse(prefs.includeContext, "context defaults off")
+        XCTAssertEqual(prefs.framing, .default)
+    }
+
+    func testFramingPreferenceRoundTrips() {
+        let suite = UserDefaults(suiteName: "cubit.test.\(UUID().uuidString)")!
+        let prefs = ExportLayoutPreferences(defaults: suite)
+        prefs.save(ExportFraming(includeContext: true, windowShadow: false))
+        XCTAssertTrue(prefs.includeContext)
+        XCTAssertFalse(prefs.windowShadow)
+        XCTAssertEqual(ExportLayoutPreferences(defaults: suite).framing, ExportFraming(includeContext: true, windowShadow: false))
+    }
 }

@@ -8,17 +8,18 @@ struct ExportMenuView: View {
     var dragProvider: () -> NSItemProvider?
     /// Toggle state saved from a prior "Remember" — off by default for every fresh user.
     var initialToggles: MetadataToggles
-    /// Window-only vs. include-surrounding-context, saved from a prior "Remember" — off
-    /// (window-only) by default.
-    var initialIncludeContext: Bool
+    /// Framing (window-only vs. context, and native window styling), saved from a prior
+    /// "Remember" — window-only + shadow-on by default.
+    var initialFraming: ExportFraming
     /// Fired on every toggle/remember flip so the caller can track the pending (possibly
     /// one-shot) selection and, when `remember` is true, persist it.
-    var onMetadataChange: (MetadataToggles, _ includeContext: Bool, _ remember: Bool) -> Void
+    var onMetadataChange: (MetadataToggles, _ framing: ExportFraming, _ remember: Bool) -> Void
 
     @State private var machine: Bool
     @State private var window: Bool
     @State private var app: Bool
     @State private var includeContext: Bool
+    @State private var windowShadow: Bool
     @State private var remember = false
 
     init(
@@ -26,27 +27,32 @@ struct ExportMenuView: View {
         onCopy: @escaping () -> Void,
         dragProvider: @escaping () -> NSItemProvider?,
         initialToggles: MetadataToggles = .allOff,
-        initialIncludeContext: Bool = false,
-        onMetadataChange: @escaping (MetadataToggles, Bool, Bool) -> Void = { _, _, _ in }
+        initialFraming: ExportFraming = .default,
+        onMetadataChange: @escaping (MetadataToggles, ExportFraming, Bool) -> Void = { _, _, _ in }
     ) {
         self.onSave = onSave
         self.onCopy = onCopy
         self.dragProvider = dragProvider
         self.initialToggles = initialToggles
-        self.initialIncludeContext = initialIncludeContext
+        self.initialFraming = initialFraming
         self.onMetadataChange = onMetadataChange
         _machine = State(initialValue: initialToggles.machine)
         _window = State(initialValue: initialToggles.window)
         _app = State(initialValue: initialToggles.app)
-        _includeContext = State(initialValue: initialIncludeContext)
+        _includeContext = State(initialValue: initialFraming.includeContext)
+        _windowShadow = State(initialValue: initialFraming.windowShadow)
     }
 
     private var currentToggles: MetadataToggles {
         MetadataToggles(machine: machine, window: window, app: app)
     }
 
+    private var currentFraming: ExportFraming {
+        ExportFraming(includeContext: includeContext, windowShadow: windowShadow)
+    }
+
     private func notifyChange() {
-        onMetadataChange(currentToggles, includeContext, remember)
+        onMetadataChange(currentToggles, currentFraming, remember)
     }
 
     var body: some View {
@@ -83,6 +89,13 @@ struct ExportMenuView: View {
                 .padding(.top, 2)
                 .padding(.bottom, 2)
 
+            Toggle(isOn: $windowShadow) {
+                Text("Window shadow")
+                    .font(.system(size: 11))
+            }
+            .toggleStyle(.checkbox)
+            .help("Style window exports like a native macOS screenshot: rounded corners and a drop shadow")
+
             Toggle(isOn: $includeContext) {
                 Text("Include surrounding context")
                     .font(.system(size: 11))
@@ -115,6 +128,7 @@ struct ExportMenuView: View {
         .onChange(of: window) { _, _ in notifyChange() }
         .onChange(of: app) { _, _ in notifyChange() }
         .onChange(of: includeContext) { _, _ in notifyChange() }
+        .onChange(of: windowShadow) { _, _ in notifyChange() }
         .padding(10)
         .frame(width: 208)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

@@ -13,34 +13,14 @@ private extension PaletteColor {
 /// Renders the composed export image: frozen screenshot + measurement marks, callout pills,
 /// leader lines, and the legend card. Pure presentation — every position comes from the
 /// engine's `ExportLayout`; every string is pre-composed. Drawn by `ImageRenderer`.
+/// This is the unstyled path (screen/custom/context): window + full-bleed footer, opaque.
 struct ScreenshotAnnotationView: View {
     let layout: ExportLayout
     let image: CGImage
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                Image(decorative: image, scale: 1, orientation: .up)
-                    .resizable()
-                    .frame(width: layout.imageSize.width, height: layout.imageSize.height)
-
-                Canvas { context, _ in
-                    drawReferenceOutline(in: context)
-                    for shape in layout.shapes { drawShape(shape, in: context) }
-                    for callout in layout.callouts { drawLeader(callout, in: context) }
-                }
-                .frame(width: layout.imageSize.width, height: layout.imageSize.height)
-
-                ForEach(layout.callouts) { callout in
-                    CalloutPill(callout: callout)
-                        .position(x: callout.frame.midX, y: callout.frame.midY)
-                }
-
-                LegendCard(legend: layout.legend)
-                    .frame(width: layout.legend.frame.width, height: layout.legend.frame.height)
-                    .position(x: layout.legend.frame.midX, y: layout.legend.frame.midY)
-            }
-            .frame(width: layout.imageSize.width, height: layout.imageSize.height)
+            AnnotatedWindowView(layout: layout, image: image)
 
             if let footer = layout.footer {
                 MetadataFooterView(footer: footer)
@@ -48,6 +28,39 @@ struct ScreenshotAnnotationView: View {
             }
         }
         .frame(width: layout.canvasSize.width, height: layout.canvasSize.height)
+    }
+}
+
+/// The window itself: frozen screenshot + measurement marks, callout pills, leaders, and the
+/// legend card, sized to the window crop. Reused unstyled (stacked with a full-bleed footer)
+/// and styled (rounded/shadowed with a floating footer card).
+struct AnnotatedWindowView: View {
+    let layout: ExportLayout
+    let image: CGImage
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Image(decorative: image, scale: 1, orientation: .up)
+                .resizable()
+                .frame(width: layout.imageSize.width, height: layout.imageSize.height)
+
+            Canvas { context, _ in
+                drawReferenceOutline(in: context)
+                for shape in layout.shapes { drawShape(shape, in: context) }
+                for callout in layout.callouts { drawLeader(callout, in: context) }
+            }
+            .frame(width: layout.imageSize.width, height: layout.imageSize.height)
+
+            ForEach(layout.callouts) { callout in
+                CalloutPill(callout: callout)
+                    .position(x: callout.frame.midX, y: callout.frame.midY)
+            }
+
+            LegendCard(legend: layout.legend)
+                .frame(width: layout.legend.frame.width, height: layout.legend.frame.height)
+                .position(x: layout.legend.frame.midX, y: layout.legend.frame.midY)
+        }
+        .frame(width: layout.imageSize.width, height: layout.imageSize.height)
     }
 
     // MARK: Canvas marks
