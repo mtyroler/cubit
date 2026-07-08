@@ -35,25 +35,52 @@ final class ExportRendererTests: XCTestCase {
         XCTAssertEqual(ExportRenderer.detailText(kind: .rectangle, metrics: metrics), "200×100 px")
     }
 
-    func testCropExpandsWindowReferenceByPaddingClampedToDisplay() {
+    // Default (context off): window/custom exports crop to the reference rect EXACTLY —
+    // window-only, no surrounding desktop.
+    func testWindowModeExactCropByDefault() {
+        let display = CanonicalRect(x: 0, y: 0, width: 1512, height: 982)
+        let windowRect = CanonicalRect(x: 36, y: 56, width: 1440, height: 870)
+        let reference = ResolvedReference(rect: windowRect, mode: .windowUnderCursor, descriptor: "Window")
+        let crop = ExportRenderer.cropRect(reference: reference, displayFrame: display, includeContext: false)
+        XCTAssertEqual(crop, windowRect, "window mode default must be the window rect exactly")
+        XCTAssertNotEqual(crop, display, "must not degenerate to the whole display")
+    }
+
+    func testCustomModeExactCropByDefault() {
+        let display = CanonicalRect(x: 0, y: 0, width: 1000, height: 800)
+        let customRect = CanonicalRect(x: 120, y: 90, width: 300, height: 220)
+        let reference = ResolvedReference(rect: customRect, mode: .custom, descriptor: "Custom")
+        XCTAssertEqual(ExportRenderer.cropRect(reference: reference, displayFrame: display, includeContext: false), customRect)
+    }
+
+    func testExactCropClampsWindowToDisplay() {
+        let display = CanonicalRect(x: 0, y: 0, width: 1000, height: 800)
+        // Window overhangs the left/top edges.
+        let windowRect = CanonicalRect(x: -40, y: -30, width: 300, height: 200)
+        let reference = ResolvedReference(rect: windowRect, mode: .windowUnderCursor, descriptor: "Window")
+        let crop = ExportRenderer.cropRect(reference: reference, displayFrame: display, includeContext: false)
+        XCTAssertEqual(crop, CanonicalRect(x: 0, y: 0, width: 260, height: 170))
+    }
+
+    func testCropExpandsWindowReferenceByPaddingWhenContextOn() {
         let display = CanonicalRect(x: 0, y: 0, width: 1000, height: 800)
         let reference = ResolvedReference(
             rect: CanonicalRect(x: 400, y: 300, width: 200, height: 150),
             mode: .windowUnderCursor,
             descriptor: "Window"
         )
-        let crop = ExportRenderer.cropRect(reference: reference, displayFrame: display)
+        let crop = ExportRenderer.cropRect(reference: reference, displayFrame: display, includeContext: true)
         XCTAssertEqual(crop, CanonicalRect(x: 352, y: 252, width: 296, height: 246))
     }
 
-    func testCropClampsToDisplayEdges() {
+    func testContextCropClampsToDisplayEdges() {
         let display = CanonicalRect(x: 0, y: 0, width: 1000, height: 800)
         let reference = ResolvedReference(
             rect: CanonicalRect(x: 10, y: 10, width: 100, height: 100),
             mode: .custom,
             descriptor: "Custom"
         )
-        let crop = ExportRenderer.cropRect(reference: reference, displayFrame: display)
+        let crop = ExportRenderer.cropRect(reference: reference, displayFrame: display, includeContext: true)
         // Left/top expansion clamps to the display origin.
         XCTAssertEqual(crop.minX, 0)
         XCTAssertEqual(crop.minY, 0)
@@ -61,9 +88,10 @@ final class ExportRendererTests: XCTestCase {
         XCTAssertEqual(crop.maxY, 158)
     }
 
-    func testScreenModeCropIsFullDisplay() {
+    func testScreenModeCropIsFullDisplayRegardlessOfContext() {
         let display = CanonicalRect(x: 0, y: 0, width: 1440, height: 900)
         let reference = ResolvedReference(rect: CanonicalRect(x: 100, y: 100, width: 50, height: 50), mode: .screen, descriptor: "Screen")
-        XCTAssertEqual(ExportRenderer.cropRect(reference: reference, displayFrame: display), display)
+        XCTAssertEqual(ExportRenderer.cropRect(reference: reference, displayFrame: display, includeContext: false), display)
+        XCTAssertEqual(ExportRenderer.cropRect(reference: reference, displayFrame: display, includeContext: true), display)
     }
 }

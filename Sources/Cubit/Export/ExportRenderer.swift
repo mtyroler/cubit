@@ -18,12 +18,13 @@ enum ExportRenderer {
         measurements: [Measurement],
         reference: ResolvedReference,
         captured: CapturedDisplay,
+        includeContext: Bool = false,
         metadata: ExportMetadata = ExportMetadata()
     ) -> CGImage? {
         let scale = captured.scale
         let displayFrame = captured.canonicalFrame
 
-        let cropCanonical = cropRect(reference: reference, displayFrame: displayFrame)
+        let cropCanonical = cropRect(reference: reference, displayFrame: displayFrame, includeContext: includeContext)
 
         // Crop the captured pixels. CGImage is top-left origin, matching display-local canonical.
         let local = CGRect(
@@ -72,12 +73,14 @@ enum ExportRenderer {
         measurements: [Measurement],
         reference: ResolvedReference,
         captured: CapturedDisplay,
+        includeContext: Bool = false,
         metadata: ExportMetadata = ExportMetadata()
     ) -> Data? {
         guard let image = renderCGImage(
             measurements: measurements,
             reference: reference,
             captured: captured,
+            includeContext: includeContext,
             metadata: metadata
         ) else {
             return nil
@@ -96,8 +99,16 @@ enum ExportRenderer {
 
     // MARK: - Crop policy
 
-    static func cropRect(reference: ResolvedReference, displayFrame: CanonicalRect) -> CanonicalRect {
+    /// Window/custom exports crop to the reference rect EXACTLY (window-only, no desktop) by
+    /// default; `includeContext` restores the padded-with-surroundings framing. Screen mode
+    /// is always the full display. Everything is clamped to the captured display.
+    static func cropRect(
+        reference: ResolvedReference,
+        displayFrame: CanonicalRect,
+        includeContext: Bool
+    ) -> CanonicalRect {
         guard reference.mode != .screen else { return displayFrame }
+        guard includeContext else { return clamp(reference.rect, to: displayFrame) }
         let expanded = CanonicalRect(
             x: reference.rect.minX - cropPadding,
             y: reference.rect.minY - cropPadding,

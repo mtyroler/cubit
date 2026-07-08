@@ -8,13 +8,17 @@ struct ExportMenuView: View {
     var dragProvider: () -> NSItemProvider?
     /// Toggle state saved from a prior "Remember" — off by default for every fresh user.
     var initialToggles: MetadataToggles
+    /// Window-only vs. include-surrounding-context, saved from a prior "Remember" — off
+    /// (window-only) by default.
+    var initialIncludeContext: Bool
     /// Fired on every toggle/remember flip so the caller can track the pending (possibly
     /// one-shot) selection and, when `remember` is true, persist it.
-    var onMetadataChange: (MetadataToggles, _ remember: Bool) -> Void
+    var onMetadataChange: (MetadataToggles, _ includeContext: Bool, _ remember: Bool) -> Void
 
     @State private var machine: Bool
     @State private var window: Bool
     @State private var app: Bool
+    @State private var includeContext: Bool
     @State private var remember = false
 
     init(
@@ -22,20 +26,27 @@ struct ExportMenuView: View {
         onCopy: @escaping () -> Void,
         dragProvider: @escaping () -> NSItemProvider?,
         initialToggles: MetadataToggles = .allOff,
-        onMetadataChange: @escaping (MetadataToggles, Bool) -> Void = { _, _ in }
+        initialIncludeContext: Bool = false,
+        onMetadataChange: @escaping (MetadataToggles, Bool, Bool) -> Void = { _, _, _ in }
     ) {
         self.onSave = onSave
         self.onCopy = onCopy
         self.dragProvider = dragProvider
         self.initialToggles = initialToggles
+        self.initialIncludeContext = initialIncludeContext
         self.onMetadataChange = onMetadataChange
         _machine = State(initialValue: initialToggles.machine)
         _window = State(initialValue: initialToggles.window)
         _app = State(initialValue: initialToggles.app)
+        _includeContext = State(initialValue: initialIncludeContext)
     }
 
     private var currentToggles: MetadataToggles {
         MetadataToggles(machine: machine, window: window, app: app)
+    }
+
+    private func notifyChange() {
+        onMetadataChange(currentToggles, includeContext, remember)
     }
 
     var body: some View {
@@ -66,6 +77,21 @@ struct ExportMenuView: View {
 
             Divider().padding(.vertical, 2)
 
+            Text("LAYOUT")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 2)
+                .padding(.bottom, 2)
+
+            Toggle(isOn: $includeContext) {
+                Text("Include surrounding context")
+                    .font(.system(size: 11))
+            }
+            .toggleStyle(.checkbox)
+            .help("Export the area around the window instead of the window alone")
+
+            Divider().padding(.vertical, 2)
+
             Text("METADATA")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.tertiary)
@@ -83,13 +109,12 @@ struct ExportMenuView: View {
                     .font(.system(size: 11))
             }
             .toggleStyle(.checkbox)
-            .onChange(of: remember) { _, newValue in
-                onMetadataChange(currentToggles, newValue)
-            }
+            .onChange(of: remember) { _, _ in notifyChange() }
         }
-        .onChange(of: machine) { _, _ in onMetadataChange(currentToggles, remember) }
-        .onChange(of: window) { _, _ in onMetadataChange(currentToggles, remember) }
-        .onChange(of: app) { _, _ in onMetadataChange(currentToggles, remember) }
+        .onChange(of: machine) { _, _ in notifyChange() }
+        .onChange(of: window) { _, _ in notifyChange() }
+        .onChange(of: app) { _, _ in notifyChange() }
+        .onChange(of: includeContext) { _, _ in notifyChange() }
         .padding(10)
         .frame(width: 208)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

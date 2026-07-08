@@ -124,6 +124,27 @@ final class AnnotationLayoutEngineTests: XCTestCase {
         return request(image: CGSize(width: 400, height: 400), callouts: callouts, legend: legend(rows: 10))
     }
 
+    // Window-exact crop: reference == crop == image bounds, and measurements touch the
+    // crop edges. Callouts and the legend must still resolve inside the image.
+    func testInBoundsWhenReferenceEqualsCropAndMeasurementsAbutEdges() {
+        let image = CGSize(width: 320, height: 220)
+        let crop = CanonicalRect(x: 0, y: 0, width: 320, height: 220)
+        let callouts = [
+            rectCallout(CanonicalRect(x: 0, y: 0, width: 130, height: 60), color: 0),        // top-left corner
+            rectCallout(CanonicalRect(x: 190, y: 160, width: 130, height: 60), color: 1),    // bottom-right corner
+            rectCallout(CanonicalRect(x: 0, y: 100, width: 60, height: 0), kind: .horizontal, color: 2) // left edge
+        ]
+        let layout = AnnotationLayoutEngine.layout(
+            request(image: image, crop: crop, reference: crop, mode: .windowUnderCursor, callouts: callouts, legend: legend(rows: 3)),
+            measuring: measuring
+        )
+        let bounds = CGRect(origin: .zero, size: image)
+        for callout in layout.callouts {
+            XCTAssertTrue(bounds.contains(callout.frame), "callout \(callout.frame) escaped \(bounds)")
+        }
+        XCTAssertTrue(bounds.contains(layout.legend.frame), "legend \(layout.legend.frame) escaped \(bounds)")
+    }
+
     // MARK: - Leaders
 
     func testNoLeaderWhenAdjacent() {

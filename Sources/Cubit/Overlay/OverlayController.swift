@@ -24,9 +24,12 @@ final class OverlayController {
 
     /// Persisted ("Remembered") metadata toggles — off by default. M6b.
     private let metadataPreferences = MetadataPreferences()
-    /// A one-shot override from the current export panel session; cleared after each export
+    /// Persisted ("Remembered") export framing — window-only by default.
+    private let layoutPreferences = ExportLayoutPreferences()
+    /// One-shot overrides from the current export panel session; cleared after each export
     /// so the following export reverts to the persisted defaults.
     private var pendingMetadataToggles: MetadataToggles?
+    private var pendingIncludeContext: Bool?
 
     var isPresented: Bool { !windows.isEmpty }
 
@@ -159,10 +162,15 @@ final class OverlayController {
             canvas.onExportCopy = { [weak self] in self?.exportCopy() }
             canvas.exportDragProvider = { [weak self] in self?.exportDragProvider() }
             canvas.currentMetadataToggles = { [weak self] in self?.effectiveMetadataToggles ?? .allOff }
-            canvas.onMetadataTogglesChanged = { [weak self] toggles, remember in
+            canvas.currentIncludeContext = { [weak self] in self?.effectiveIncludeContext ?? false }
+            canvas.onMetadataTogglesChanged = { [weak self] toggles, includeContext, remember in
                 guard let self else { return }
                 self.pendingMetadataToggles = toggles
-                if remember { self.metadataPreferences.save(toggles) }
+                self.pendingIncludeContext = includeContext
+                if remember {
+                    self.metadataPreferences.save(toggles)
+                    self.layoutPreferences.includeContext = includeContext
+                }
             }
             canvas.installHUD()
             canvas.installToolPill()
@@ -228,18 +236,27 @@ final class OverlayController {
         pendingMetadataToggles ?? metadataPreferences.toggles
     }
 
+    /// The framing that would apply to an export started right now: a pending panel
+    /// selection if one exists, otherwise the persisted ("Remembered") default.
+    private var effectiveIncludeContext: Bool {
+        pendingIncludeContext ?? layoutPreferences.includeContext
+    }
+
     private func currentExportPNG() -> Data? {
         guard let session,
               let captured = ExportRenderer.captured(for: session.resolved, in: capturedDisplays) else { return nil }
         let toggles = effectiveMetadataToggles
+        let includeContext = effectiveIncludeContext
         // One-shot: the next export reverts to the persisted defaults unless this
         // selection was "Remembered", in which case that's now the persisted default too.
         pendingMetadataToggles = nil
+        pendingIncludeContext = nil
         let metadata = MetadataCollector.collect(toggles: toggles, reference: session.resolved, captured: captured)
         return ExportRenderer.renderPNG(
             measurements: session.measurements,
             reference: session.resolved,
             captured: captured,
+            includeContext: includeContext,
             metadata: metadata
         )
     }
