@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Nightjar</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1000px;
+    height: 700px;
+    overflow: hidden;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+    background: #15151A;
+    color: #F1EFEA;
+  }
+  .titlebar {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0 18px;
+    background: #1C1C22;
+    border-bottom: 1px solid #2A2A32;
+  }
+  .dots { display: flex; gap: 8px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.red { background: #FF5F57; }
+  .dot.yellow { background: #FEBC2E; }
+  .dot.green { background: #28C840; }
+  .titlebar .name {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #8B8A93;
+    margin-right: 54px;
+  }
+  .layout { display: flex; height: calc(700px - 44px); }
+  .sidebar {
+    width: 200px;
+    padding: 28px 18px;
+    background: #1C1C22;
+    border-right: 1px solid #2A2A32;
+  }
+  .brand { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 26px; color: #F1EFEA; }
+  .brand span { color: #7C9CFF; }
+  .navitem { font-size: 13px; padding: 8px 10px; border-radius: 8px; margin-bottom: 2px; color: #8B8A93; }
+  .navitem.active { background: #26262F; color: #F1EFEA; font-weight: 600; }
+  .main { flex: 1; padding: 56px 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .art {
+    width: 260px; height: 260px;
+    border-radius: 18px;
+    background: linear-gradient(150deg, #7C9CFF 0%, #5C6FE0 45%, #3D3A7A 100%);
+    box-shadow: 0 24px 50px rgba(60, 50, 130, 0.4);
+    position: relative;
+    margin-bottom: 34px;
+  }
+  .art::after {
+    content: "";
+    position: absolute; inset: 0; border-radius: 18px;
+    background:
+      radial-gradient(circle at 32% 28%, rgba(255,255,255,0.3), transparent 42%),
+      radial-gradient(circle at 68% 72%, rgba(0,0,0,0.25), transparent 55%);
+  }
+  .track-title { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .track-artist { font-size: 14px; color: #8B8A93; margin-bottom: 30px; }
+  .progress {
+    width: 420px; height: 4px; border-radius: 999px;
+    background: #2A2A32; position: relative; margin-bottom: 10px;
+  }
+  .progress .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: #7C9CFF; border-radius: 999px; }
+  .progress .knob { position: absolute; left: 38%; top: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px; border-radius: 50%; background: #F1EFEA; }
+  .times { width: 420px; display: flex; justify-content: space-between; font-size: 11px; color: #8B8A93; margin-bottom: 30px; }
+  .controls { display: flex; align-items: center; gap: 26px; }
+  .ctl { width: 18px; height: 18px; opacity: 0.85; }
+  .playbtn { width: 52px; height: 52px; border-radius: 50%; background: #F1EFEA; }
+</style>
+</head>
+<body>
+  <div class="titlebar">
+    <div class="dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
+    <div class="name">Nightjar</div>
+  </div>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="brand">night<span>jar</span></div>
+      <div class="navitem active">Now Playing</div>
+      <div class="navitem">Library</div>
+      <div class="navitem">Radio</div>
+      <div class="navitem">Playlists</div>
+    </div>
+    <div class="main">
+      <div class="art"></div>
+      <div class="track-title">Slow Static</div>
+      <div class="track-artist">The Quiet Hours</div>
+      <div class="progress"><div class="fill"></div><div class="knob"></div></div>
+      <div class="times"><span>1:24</span><span>3:41</span></div>
+      <div class="controls">
+        <div class="ctl">⏮</div>
+        <div class="playbtn"></div>
+        <div class="ctl">⏭</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

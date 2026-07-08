@@ -5,7 +5,7 @@
 <h1 align="center">Cubit</h1>
 
 <p align="center">
-  Show exactly how much of the screen a design wastes — draw a line or box, get the %, export a marked-up screenshot.
+  Know exactly how much room your design gives its content. Draw a box, get the percentage.
 </p>
 
 <p align="center">
@@ -14,9 +14,15 @@
   <img src="https://img.shields.io/badge/macOS-26%2B-blue.svg" alt="macOS 26+">
 </p>
 
+<p align="center">
+  <img src="Design/ReadmeAssets/export-recipe-app.png" width="100%" alt="A Cubit export over a sample recipe-app window, with three color-coded measurements: a hero photo at 17.4%, recipe details at 22.0%, and breathing room in the sidebar at 14.8%.">
+</p>
+
+A cubit was an old unit of length measured forearm-to-fingertip — a measurement you could point at, not just eyeball. That's the idea here too: instead of guessing whether something has enough padding, you draw a box and get the number. The app's icon is a tape measure sticking its tongue out, because measuring things should be a little fun.
+
 ## Why
 
-"How much of this screen is dead space?" comes up constantly in design review, QA, and bug reports, and the honest answer is usually a guess. Cubit turns it into a number: draw a rectangle or a line over anything on screen and it's expressed as a percentage of a window, a display, or a custom rectangle you define — live, as you draw. When you've got the measurement you want, export it as an annotated screenshot to drop into a ticket or a Slack thread.
+"Does this have enough breathing room?" is a question that usually gets answered by squinting. Cubit turns it into a number: draw a rectangle or a line over anything on screen and it's expressed as a percentage of a window, a display, or a custom reference you define — live, as you draw. Point it at a hero image, a sidebar, a margin, whatever you're trying to get a feel for, and watch the percentage update as you resize. When you've got the measurement that tells the story, export it as an annotated screenshot to drop into a design review, a spec, or a Slack thread.
 
 ## Features
 
@@ -25,6 +31,7 @@
 - Reference frame is the window under your cursor by default; `Tab` cycles to full screen, or draw a custom reference rectangle
 - Multiple simultaneous, color-coded measurements with editable labels, selection, nudge/resize, and undo
 - Export a designed annotated PNG — callout pills, leader lines, and a legend card — via save, copy, or drag-out
+- Window exports crop to the window exactly by default; an "Include surrounding context" toggle in the export menu pads it back out when you want the desktop around it
 - Optional metadata footer on exports (machine name, window title, app name) — all off by default
 - Menu-bar-first UX (no Dock icon) with a Settings window for shortcuts, appearance, and export defaults
 - Zero third-party dependencies
@@ -59,13 +66,17 @@ Press the hotkey to freeze the screen and open the overlay, then:
 | Copy export to clipboard | `⌘C` |
 | Close menu / deselect / cancel / dismiss overlay | `Esc` |
 
+<p align="center">
+  <img src="Design/ReadmeAssets/export-music-app.png" width="100%" alt="A Cubit export over a sample music-player window, measuring the album art at 9.7%, the playback controls at 6.6%, and breathing room in the sidebar at 13.4%.">
+</p>
+
 ## Demo
 
 <!-- TODO: replace with a real screen recording of Cubit in action -->
 
 ## Privacy
 
-Cubit doesn't talk to the network — nothing you measure, capture, or export leaves your Mac. The optional metadata footer on exports (machine name, window title, app name) is off by default and only ever writes into the image file you choose to save or copy.
+Cubit doesn't talk to the network — nothing you measure, capture, or export leaves your Mac. The optional metadata footer on exports (machine name, window title, app name) is off by default and only ever writes into the image file you choose to save or copy. The two sample exports above were generated against synthetic, throwaway app mockups — no real windows, filenames, or personal content — specifically for this README.
 
 Cubit is unsandboxed. It needs system-wide window and screen information (via `CGWindowList` and system-wide screen capture) to detect the window under your cursor and freeze the whole screen for measuring, which the App Sandbox doesn't permit for third-party apps.
 
