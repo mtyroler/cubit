@@ -246,16 +246,28 @@ final class OverlayController {
         pendingFraming ?? layoutPreferences.framing
     }
 
-    private func currentExportPNG() -> Data? {
+    private func currentExportPNG() async -> Data? {
         guard let session,
               let captured = ExportRenderer.captured(for: session.resolved, in: capturedDisplays) else { return nil }
+        let reference = session.resolved
         let toggles = effectiveMetadataToggles
         let framing = effectiveFraming
         // One-shot: the next export reverts to the persisted defaults unless this
         // selection was "Remembered", in which case that's now the persisted default too.
         pendingMetadataToggles = nil
         pendingFraming = nil
-        let metadata = MetadataCollector.collect(toggles: toggles, reference: session.resolved, captured: captured)
+
+        // Exact-window export: capture the window's own occlusion-free pixels so a window
+        // stacked on top of the target doesn't bleed into the crop. Falls back (nil) to the
+        // display-snapshot crop if the capture fails. Context/screen/custom keep the snapshot.
+        var windowImage: CGImage?
+        if reference.mode == .windowUnderCursor,
+           !framing.includeContext,
+           let windowID = reference.window?.windowID {
+            windowImage = await captureService.captureWindow(windowID: CGWindowID(windowID))
+        }
+
+        let metadata = MetadataCollector.collect(toggles: toggles, reference: reference, captured: captured)
         let markup = MarkupStyle(
             borderWidth: CGFloat(settings.measurementBorderWidth),
             fillOpacity: CGFloat(settings.measurementFillOpacity),
@@ -263,34 +275,41 @@ final class OverlayController {
         )
         return ExportRenderer.renderPNG(
             measurements: session.measurements,
-            reference: session.resolved,
+            reference: reference,
             captured: captured,
             includeContext: framing.includeContext,
             windowShadow: framing.windowShadow,
             metadata: metadata,
-            markup: markup
+            markup: markup,
+            windowImage: windowImage
         )
     }
 
     func exportSave() {
         guard canExport else { showOnboarding(); return }
-        guard let data = currentExportPNG() else { return }
-        let directoryURL = Exporter.resolvedSaveDirectory(forPath: settings.defaultExportFolderPath)
-        if let url = Exporter.saveToFile(data, above: windows as [NSWindow], directoryURL: directoryURL) {
-            frontCanvas?.showToast("Saved to \(Exporter.abbreviatedPath(url))")
+        Task { @MainActor in
+            guard let data = await currentExportPNG() else { return }
+            let directoryURL = Exporter.resolvedSaveDirectory(forPath: settings.defaultExportFolderPath)
+            if let url = Exporter.saveToFile(data, above: windows as [NSWindow], directoryURL: directoryURL) {
+                frontCanvas?.showToast("Saved to \(Exporter.abbreviatedPath(url))")
+            }
         }
     }
 
     func exportCopy() {
         guard canExport else { showOnboarding(); return }
-        guard let data = currentExportPNG() else { return }
-        Exporter.copyToPasteboard(data)
-        frontCanvas?.showToast("Copied to clipboard")
+        Task { @MainActor in
+            guard let data = await currentExportPNG() else { return }
+            Exporter.copyToPasteboard(data)
+            frontCanvas?.showToast("Copied to clipboard")
+        }
     }
 
     private func exportDragProvider() -> NSItemProvider? {
-        guard canExport, let data = currentExportPNG() else { return nil }
-        return Exporter.dragItemProvider(data)
+        guard canExport else { return nil }
+        return Exporter.dragItemProvider { [weak self] in
+            await self?.currentExportPNG() ?? nil
+        }
     }
 
     private func updateAppState() {

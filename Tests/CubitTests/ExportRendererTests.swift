@@ -121,6 +121,70 @@ final class ExportRendererTests: XCTestCase {
         XCTAssertEqual(ExportLayoutPreferences(defaults: suite).framing, ExportFraming(includeContext: true, windowShadow: false))
     }
 
+    // MARK: - Clean-window substitution (occlusion fix)
+
+    /// A solid CGImage of a given pixel size, used to stand in for a capture.
+    private static func solidImage(width: Int, height: Int) -> CGImage {
+        let space = CGColorSpaceCreateDeviceRGB()
+        let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        ctx.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.6, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return ctx.makeImage()!
+    }
+
+    // With a clean window capture supplied, an exact-window export must render from that image
+    // (its native pixel size) rather than cropping the display snapshot — this is what keeps an
+    // occluding window from bleeding into the crop.
+    func testExactWindowExportRendersFromCleanWindowImage() throws {
+        let scale: CGFloat = 2
+        let display = CanonicalRect(x: 0, y: 0, width: 1000, height: 800)
+        let displayImage = Self.solidImage(width: Int(1000 * scale), height: Int(800 * scale))
+        let captured = CapturedDisplay(displayID: 1, cgImage: displayImage, canonicalFrame: display, scale: scale)
+
+        let windowRect = CanonicalRect(x: 100, y: 100, width: 400, height: 300)
+        let reference = ResolvedReference(rect: windowRect, mode: .windowUnderCursor, descriptor: "Window")
+        let windowImage = Self.solidImage(width: Int(400 * scale), height: Int(300 * scale))
+
+        let out = try XCTUnwrap(ExportRenderer.renderCGImage(
+            measurements: [],
+            reference: reference,
+            captured: captured,
+            includeContext: false,
+            windowShadow: false, // plain path: no shadow margins, so size == window image
+            windowImage: windowImage
+        ))
+        XCTAssertEqual(out.width, windowImage.width, "output must match the clean window image width")
+        XCTAssertEqual(out.height, windowImage.height, "output must match the clean window image height")
+    }
+
+    // Context exports still crop the display snapshot even when a window image is offered — the
+    // surrounding desktop is the whole point of that mode.
+    func testContextExportIgnoresCleanWindowImage() throws {
+        let scale: CGFloat = 2
+        let display = CanonicalRect(x: 0, y: 0, width: 1000, height: 800)
+        let displayImage = Self.solidImage(width: Int(1000 * scale), height: Int(800 * scale))
+        let captured = CapturedDisplay(displayID: 1, cgImage: displayImage, canonicalFrame: display, scale: scale)
+
+        let windowRect = CanonicalRect(x: 100, y: 100, width: 400, height: 300)
+        let reference = ResolvedReference(rect: windowRect, mode: .windowUnderCursor, descriptor: "Window")
+        let windowImage = Self.solidImage(width: Int(400 * scale), height: Int(300 * scale))
+
+        let out = try XCTUnwrap(ExportRenderer.renderCGImage(
+            measurements: [],
+            reference: reference,
+            captured: captured,
+            includeContext: true,
+            windowShadow: false,
+            windowImage: windowImage
+        ))
+        // Context crop = window padded by 48pt each side → 496×396 pt at scale 2.
+        XCTAssertEqual(out.width, Int(496 * scale), "context export must use the padded display crop")
+        XCTAssertNotEqual(out.width, windowImage.width, "context export must not use the bare window image")
+    }
+
     // MARK: - Save-panel default directory fallback (pure, no real filesystem touched)
 
     func testResolvedSaveDirectoryNilPathFallsBackToSystemDefault() {
