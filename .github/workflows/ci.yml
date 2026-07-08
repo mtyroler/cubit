@@ -15,3 +15,28 @@ jobs:
       - name: Build and test
         run: |
           xcodebuild -scheme Cubit -destination 'platform=macOS' -skipPackagePluginValidation build test CODE_SIGNING_ALLOWED=NO
+
+  package-app:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build (ad-hoc signed Release)
+        run: |
+          xcodebuild -scheme Cubit -configuration Release -derivedDataPath build \
+            build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGNING_ALLOWED=YES
+
+      - name: Package
+        run: |
+          ditto -c -k --keepParent "build/Build/Products/Release/Cubit.app" "Cubit-pr.zip"
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cubit-pr-${{ github.event.pull_request.number }}
+          path: Cubit-pr.zip
+          retention-days: 14
