@@ -42,6 +42,18 @@ enum MCPTools {
             inputSchema: schema(Schemas.annotateScreenshot)
         ),
         ToolDescriptor(
+            name: "show_overlay",
+            description: """
+            Propose measurements that light up as EDITABLE shapes on the user's REAL screen in \
+            Cubit's overlay, where they drag/resize/relabel them and export. Coordinates are \
+            canonical points (top-left origin, y-down), the same space list_windows reports — so \
+            propose measurements straight from those frames with no remapping. Presents the \
+            overlay (stealing focus) and is user-adjustable; it never captures or exports on its \
+            own. Requires the Cubit app to be installed. Up to 200 measurements.
+            """,
+            inputSchema: schema(Schemas.showOverlay)
+        ),
+        ToolDescriptor(
             name: "analyze_dead_space",
             description: """
             Compute how much of a window/display/rect is unused ("dead") space, given the \
@@ -62,6 +74,7 @@ enum MCPTools {
             case "list_windows": return try listWindows(arguments)
             case "measure_region": return try measureRegion(arguments)
             case "annotate_screenshot": return try annotateScreenshot(arguments, context: context)
+            case "show_overlay": return try showOverlay(arguments)
             case "analyze_dead_space": return try analyzeDeadSpace(arguments)
             default: return .failure("unknown_tool: no tool named '\(name)'")
             }
@@ -237,6 +250,38 @@ enum MCPTools {
             content.append(.image(base64: rendered.png.base64EncodedString(), mimeType: "image/png"))
         }
         return .ok(content)
+    }
+
+    // MARK: - show_overlay
+
+    static func showOverlay(_ arguments: JSONValue?) throws -> ToolResult {
+        // The arguments ARE the handoff document (canonical proposed measurements). Decode via the
+        // shared Core type so the CLI, MCP server, and app can never drift. `open(document:)`
+        // validates (schema version, count cap, per-measurement shape), stages a temp file, and
+        // opens cubit://show — it never executes anything from the payload.
+        let document = try decodeHandoffDocument(arguments)
+        let result = try HandoffLauncher.open(document: document)
+        let doc = ShowOverlayResultDoc(
+            opened: result.path,
+            measurementCount: result.count,
+            note: document.note
+        )
+        return .ok([.text(try prettyJSON(doc))])
+    }
+
+    static func decodeHandoffDocument(_ arguments: JSONValue?) throws -> HandoffDocument {
+        let value = arguments ?? .object([:])
+        let data = try JSONEncoder().encode(value)
+        do {
+            return try JSONDecoder().decode(HandoffDocument.self, from: data)
+        } catch let DecodingError.keyNotFound(key, _) {
+            throw CLIError(.usage, "cubit: missing required argument '\(key.stringValue)'")
+        } catch let DecodingError.typeMismatch(_, context) {
+            let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+            throw CLIError(.usage, "cubit: argument type mismatch at \(path.isEmpty ? "<root>" : path)")
+        } catch {
+            throw CLIError(.usage, "cubit: invalid arguments: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - analyze_dead_space
@@ -529,6 +574,13 @@ struct MeasureResult: Encodable {
     let percentages: Percentages
     let reference: Reference
     let scale: Double
+}
+
+struct ShowOverlayResultDoc: Encodable {
+    /// The staged temp file the app reads (its own JSON document).
+    let opened: String
+    let measurementCount: Int
+    let note: String?
 }
 
 struct AnnotateResultDoc: Encodable {

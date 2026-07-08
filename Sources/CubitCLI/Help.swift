@@ -11,6 +11,7 @@ enum Help {
       windows     List on-screen windows as JSON (number, app, title, frame, scale).
       capture     Save a frozen PNG of a window or a display.
       annotate    Render Cubit-style measurement annotations onto an existing image.
+      show        Open the Cubit overlay with proposed measurements for the user to adjust.
 
     GLOBAL:
       --help, -h      Show help (also available per command: cubit <command> --help).
@@ -107,5 +108,42 @@ enum Help {
     NOTES:
       Uses the same layout engine and drawing pipeline as an app export, so output matches
       the app pixel-for-pixel. Output PNGs are metadata-free.
+    """
+
+    static let show = """
+    cubit show — open the Cubit overlay with agent-proposed measurements (live handoff).
+
+    USAGE:
+      cubit show --regions <file>
+
+    OPTIONS:
+      --regions, -r <file>  Handoff JSON document (see SCHEMA). Coordinates are CANONICAL
+                            points (top-left origin, y-down) — the same space `cubit windows`
+                            frames use, so propose measurements straight from those.
+
+    SCHEMA (handoff document — all coordinates in CANONICAL POINTS):
+      {
+        "schemaVersion": 1,
+        "note": "Proposed layout for the sidebar",
+        "measurements": [
+          { "kind": "rectangle",
+            "rect": { "x": 320, "y": 140, "width": 480, "height": 300 },
+            "label": "hero", "colorIndex": 0 },
+          { "kind": "horizontal",
+            "endpoints": [ { "x": 320, "y": 480 }, { "x": 800, "y": 480 } ] },
+          { "kind": "vertical",
+            "endpoints": [ { "x": 320, "y": 140 }, { "x": 320, "y": 440 } ] }
+        ]
+      }
+
+      - "schemaVersion" defaults to 1 when omitted. "note", "label", "colorIndex" optional.
+      - A rectangle needs "rect"; a line needs two "endpoints" (horizontal shares y, vertical
+        shares x). Up to 200 measurements.
+
+    NOTES:
+      The proposed measurements appear on your REAL screen as editable shapes — drag, resize,
+      relabel, then ⌘E to export. Presenting the overlay steals focus and draws on screen (it
+      is user-initiated tooling). This opens a cubit:// URL; the Cubit app must be installed.
+      Prints {opened,measurementCount} as JSON on success.
     """
 }

@@ -140,6 +140,19 @@ final class MeasurementSession {
         draft = nil
     }
 
+    /// Injects agent-proposed measurements (a live-overlay handoff) as first-class editable
+    /// measurements. The whole proposal collapses into ONE undo step so the user can undo the
+    /// entire handoff, and the first injected measurement becomes selected so the existing
+    /// selection handles are immediately live on it. Returns false for an empty proposal.
+    @discardableResult
+    func injectProposed(_ proposed: [Measurement]) -> Bool {
+        guard !proposed.isEmpty else { return false }
+        pushUndo()
+        measurements.append(contentsOf: proposed)
+        selectedID = proposed.first?.id
+        return true
+    }
+
     // MARK: Custom reference drawing
 
     func beginCustomDraft(at anchor: CanonicalPoint) {

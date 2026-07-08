@@ -36,6 +36,8 @@ public enum CubitCLI {
             return try await CaptureCommand.run(rest)
         case "annotate":
             return try AnnotateCommand.run(rest)
+        case "show":
+            return try ShowCommand.run(rest)
         default:
             throw CLIError(.usage, "cubit: unknown command '\(command)'\nRun 'cubit --help' for usage.")
         }
