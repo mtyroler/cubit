@@ -16,6 +16,16 @@ jobs:
         run: |
           xcodebuild -scheme Cubit -destination 'platform=macOS' -skipPackagePluginValidation build test CODE_SIGNING_ALLOWED=NO
 
+  cli-test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and test the cubit CLI (SwiftPM)
+        run: |
+          swift build
+          swift test
+
   package-app:
     if: github.event_name == 'pull_request'
     runs-on: macos-26
