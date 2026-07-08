@@ -4,7 +4,7 @@ Thanks for your interest in contributing!
 
 ## Getting started
 
-1. Clone the repo and open `Cubit.xcodeproj` in Xcode 16 or later (macOS 14+ SDK).
+1. Clone the repo and open `Cubit.xcodeproj` in Xcode 26 or later (macOS 26 SDK).
 2. Build and run the `Cubit` scheme, or from the command line:
    ```sh
    xcodebuild -scheme Cubit build test

@@ -20,7 +20,7 @@ Cubit is a lightweight macOS menu-bar utility for measuring how much of a window
 
 ## Requirements
 
-- macOS 14.0 or later
+- macOS 26 (Tahoe) or later
 
 ## Build from source
 
