@@ -8,9 +8,4 @@
   <path d="M 284 192 Q 298 173 312 192" fill="none" stroke="#0C3835" stroke-width="9.5" stroke-linecap="round"/>
   <circle cx="190" cy="224" r="12" fill="#FF8FAF" opacity="0.65" filter="url(#lg-blur4)"/>
   <circle cx="324" cy="224" r="12" fill="#FF8FAF" opacity="0.65" filter="url(#lg-blur4)"/>
-
-  <!-- mouth slot ON TOP of tape: the tape visibly exits its lower lip -->
-  <rect x="216" y="288" width="96" height="26" rx="13" fill="#0A3532"/>
-  <rect x="220" y="290" width="88" height="6" rx="3" fill="#000000" opacity="0.45"/>
-  <rect x="222" y="306" width="84" height="4" rx="2" fill="#5ECFC7" opacity="0.35"/>
 </svg>
