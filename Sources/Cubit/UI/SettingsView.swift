@@ -204,6 +204,12 @@ private struct ExportSettingsTab: View {
                 Toggle("Copy to clipboard after export", isOn: $settings.copyAfterExport)
             }
             Section {
+                Toggle("Include surrounding context", isOn: $settings.includeContext)
+                Toggle("Window shadow", isOn: $settings.windowShadow)
+            } header: {
+                Text("Layout")
+            }
+            Section {
                 Toggle("Machine name", isOn: $settings.imprintMachineName)
                 Toggle("Window title", isOn: $settings.imprintWindowTitle)
                 Toggle("App name", isOn: $settings.imprintAppName)

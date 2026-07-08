@@ -141,6 +141,25 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: "export.metadata.app"))
     }
 
+    func testExportFramingTogglesReadWriteSharedRawKeys() {
+        let defaults = makeSuite("com.cubit.tests.settings.framing")
+        let settings = SettingsStore(defaults: defaults)
+
+        XCTAssertFalse(settings.includeContext, "context defaults off")
+        XCTAssertTrue(settings.windowShadow, "shadow defaults on when unset")
+
+        settings.includeContext = true
+        settings.windowShadow = false
+
+        XCTAssertTrue(defaults.bool(forKey: "export.includeContext"))
+        XCTAssertFalse(defaults.object(forKey: "export.windowShadow") as? Bool ?? true)
+
+        // Same keys ExportLayoutPreferences reads — this is the documented contract.
+        let prefs = ExportLayoutPreferences(defaults: defaults)
+        XCTAssertTrue(prefs.includeContext)
+        XCTAssertFalse(prefs.windowShadow)
+    }
+
     func testLaunchAtLoginIsNoOpUnderTests() {
         let defaults = makeSuite("com.cubit.tests.settings.launch")
         let settings = SettingsStore(defaults: defaults)

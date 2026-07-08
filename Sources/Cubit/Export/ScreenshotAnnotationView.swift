@@ -52,7 +52,7 @@ struct AnnotatedWindowView: View {
             .frame(width: layout.imageSize.width, height: layout.imageSize.height)
 
             ForEach(layout.callouts) { callout in
-                CalloutPill(callout: callout)
+                CalloutPill(callout: callout, markup: layout.markup)
                     .position(x: callout.frame.midX, y: callout.frame.midY)
             }
 
@@ -84,8 +84,8 @@ struct AnnotatedWindowView: View {
         switch shape.kind {
         case .rectangle:
             let box = Path(roundedRect: r, cornerRadius: 2)
-            context.fill(box, with: .color(color.opacity(0.12)))
-            context.stroke(box, with: .color(color), lineWidth: 2)
+            context.fill(box, with: .color(color.opacity(layout.markup.fillOpacity)))
+            context.stroke(box, with: .color(color), lineWidth: layout.markup.borderWidth)
             drawEdgeTicks(r, color: color, in: context)
         case .horizontal:
             let a = CGPoint(x: r.minX, y: r.minY), b = CGPoint(x: r.maxX, y: r.minY)
@@ -108,9 +108,10 @@ struct AnnotatedWindowView: View {
     }
 
     private func drawLine(_ a: CGPoint, _ b: CGPoint, color: Color, capVertical: Bool, in context: GraphicsContext) {
+        let width = layout.markup.borderWidth
         var line = Path()
         line.move(to: a); line.addLine(to: b)
-        context.stroke(line, with: .color(color), lineWidth: 2)
+        context.stroke(line, with: .color(color), lineWidth: width)
 
         let half: CGFloat = 6
         var caps = Path()
@@ -121,7 +122,7 @@ struct AnnotatedWindowView: View {
                 caps.move(to: CGPoint(x: p.x - half, y: p.y)); caps.addLine(to: CGPoint(x: p.x + half, y: p.y))
             }
         }
-        context.stroke(caps, with: .color(color), lineWidth: 2)
+        context.stroke(caps, with: .color(color), lineWidth: width)
     }
 
     private func drawLeader(_ callout: PlacedCallout, in context: GraphicsContext) {
@@ -137,21 +138,22 @@ struct AnnotatedWindowView: View {
 
 private struct CalloutPill: View {
     let callout: PlacedCallout
+    let markup: MarkupStyle
 
     var body: some View {
         let palette = Palette.color(forIndex: callout.colorIndex)
         VStack(alignment: .leading, spacing: AnnotationLayoutEngine.pillLineSpacing) {
             if let label = callout.labelText, !label.isEmpty {
                 Text(label)
-                    .font(ExportFontRole.calloutLabel.font)
+                    .font(ExportFontRole.calloutLabel.font(pointSize: markup.calloutLabelPointSize))
                     .foregroundStyle(palette.inkColor.opacity(0.9))
             }
             Text(callout.primaryText)
-                .font(ExportFontRole.calloutPrimary.font)
+                .font(ExportFontRole.calloutPrimary.font(pointSize: markup.calloutPrimaryPointSize))
                 .foregroundStyle(palette.inkColor)
             if !callout.detailText.isEmpty {
                 Text(callout.detailText)
-                    .font(ExportFontRole.calloutDetail.font)
+                    .font(ExportFontRole.calloutDetail.font(pointSize: markup.calloutDetailPointSize))
                     .foregroundStyle(palette.inkColor.opacity(0.85))
             }
         }

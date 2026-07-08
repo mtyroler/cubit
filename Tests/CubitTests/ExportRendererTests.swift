@@ -120,4 +120,30 @@ final class ExportRendererTests: XCTestCase {
         XCTAssertFalse(prefs.windowShadow)
         XCTAssertEqual(ExportLayoutPreferences(defaults: suite).framing, ExportFraming(includeContext: true, windowShadow: false))
     }
+
+    // MARK: - Save-panel default directory fallback (pure, no real filesystem touched)
+
+    func testResolvedSaveDirectoryNilPathFallsBackToSystemDefault() {
+        XCTAssertNil(Exporter.resolvedSaveDirectory(forPath: nil, isDirectory: { _ in true }))
+    }
+
+    func testResolvedSaveDirectoryMissingFolderFallsBackToSystemDefault() {
+        let result = Exporter.resolvedSaveDirectory(forPath: "/does/not/exist", isDirectory: { _ in false })
+        XCTAssertNil(result, "a folder that no longer exists must fall back, never crash")
+    }
+
+    func testResolvedSaveDirectoryExistingFolderResolvesToURL() {
+        let path = "/var/example/Desktop"
+        let result = Exporter.resolvedSaveDirectory(forPath: path, isDirectory: { _ in true })
+        XCTAssertEqual(result, URL(fileURLWithPath: path, isDirectory: true))
+    }
+
+    func testResolvedSaveDirectoryDefaultClosureUsesRealFilesystem() {
+        let tempDir = FileManager.default.temporaryDirectory
+        let resolved = Exporter.resolvedSaveDirectory(forPath: tempDir.path)
+        XCTAssertEqual(resolved?.standardizedFileURL, tempDir.standardizedFileURL)
+
+        let missing = tempDir.appendingPathComponent("cubit-export-tests-\(UUID().uuidString)").path
+        XCTAssertNil(Exporter.resolvedSaveDirectory(forPath: missing))
+    }
 }

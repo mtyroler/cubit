@@ -14,15 +14,20 @@ enum Exporter {
     }
 
     /// Presents a save panel above the overlay windows and writes the PNG on confirm.
-    /// Returns the written URL, or nil if cancelled or the write failed.
+    /// `directoryURL`, when non-nil, pre-selects that folder; nil falls back to the system
+    /// default (the panel's own last-used location). Returns the written URL, or nil if
+    /// cancelled or the write failed.
     @discardableResult
-    static func saveToFile(_ data: Data, above overlayWindows: [NSWindow]) -> URL? {
+    static func saveToFile(_ data: Data, above overlayWindows: [NSWindow], directoryURL: URL? = nil) -> URL? {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = defaultFilename()
         panel.allowedContentTypes = [.png]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
         panel.level = panelLevel(above: overlayWindows)
+        if let directoryURL {
+            panel.directoryURL = directoryURL
+        }
 
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
@@ -32,6 +37,22 @@ enum Exporter {
         } catch {
             return nil
         }
+    }
+
+    /// Resolves `SettingsStore.defaultExportFolderPath` to a directory URL for the save
+    /// panel, falling back to nil (system default) when unset or the folder no longer
+    /// exists. `isDirectory` is injectable so the fallback logic is testable without
+    /// touching the real filesystem.
+    nonisolated static func resolvedSaveDirectory(
+        forPath path: String?,
+        isDirectory: (String) -> Bool = { path in
+            var isDir: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
+            return exists && isDir.boolValue
+        }
+    ) -> URL? {
+        guard let path, isDirectory(path) else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
     }
 
     /// A level strictly above the frontmost overlay window so the panel isn't buried.
