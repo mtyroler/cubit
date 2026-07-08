@@ -1,7 +1,11 @@
 import AppKit
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let overlayController = OverlayController()
+    private var hotkeyManager: HotkeyManager?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Hotkey registration and overlay window setup will live here.
+        hotkeyManager = HotkeyManager(controller: overlayController)
     }
 }

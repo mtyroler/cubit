@@ -6,8 +6,12 @@ struct CubitApp: App {
 
     var body: some Scene {
         MenuBarExtra("Cubit", systemImage: "ruler") {
-            Button("Measure (coming soon)") {}
-                .disabled(true)
+            Button {
+                appDelegate.overlayController.toggle()
+            } label: {
+                Label("Measure", systemImage: "ruler")
+            }
+            .keyboardShortcut("m", modifiers: [.option, .command])
 
             Divider()
 
