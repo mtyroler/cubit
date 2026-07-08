@@ -321,6 +321,7 @@
 		1000000000000000000000D5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = Cubit;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = Sources/Cubit/Resources/Cubit.entitlements;
 				CODE_SIGN_IDENTITY = "-";
@@ -352,6 +353,7 @@
 		1000000000000000000000D6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = Cubit;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = Sources/Cubit/Resources/Cubit.entitlements;
 				CODE_SIGN_IDENTITY = "-";
