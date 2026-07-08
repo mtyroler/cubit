@@ -6,10 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		1000000000000000000000E1 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 1000000000000000000000E2 /* KeyboardShortcuts */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		1000000000000000000000F0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -56,7 +52,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1000000000000000000000E1 /* KeyboardShortcuts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -108,7 +103,6 @@
 			);
 			name = Cubit;
 			packageProductDependencies = (
-				1000000000000000000000E2 /* KeyboardShortcuts */,
 			);
 			productName = Cubit;
 			productReference = 1000000000000000000000A6 /* Cubit.app */;
@@ -164,9 +158,6 @@
 			);
 			mainGroup = 1000000000000000000000A2;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				1000000000000000000000E3 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1000000000000000000000A3 /* Products */;
 			projectDirPath = "";
@@ -462,25 +453,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		1000000000000000000000E3 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		1000000000000000000000E2 /* KeyboardShortcuts */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1000000000000000000000E3 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
-			productName = KeyboardShortcuts;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1000000000000000000000A1 /* Project object */;
 }
