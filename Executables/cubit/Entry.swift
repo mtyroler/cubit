@@ -1,4 +1,5 @@
 import AppKit
+import Cubit
 import Foundation
 
 /// Process entry point. SwiftUI's `ImageRenderer` (annotate) and ScreenCaptureKit (capture)

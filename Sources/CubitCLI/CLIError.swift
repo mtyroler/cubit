@@ -2,7 +2,7 @@ import Foundation
 
 /// Process exit codes, documented in `--help`. Agents key off these to react without parsing
 /// stderr: 3 means "grant Screen Recording", 4 means "your window/name didn't resolve".
-enum ExitCode: Int32 {
+public enum ExitCode: Int32, Sendable {
     case ok = 0
     case generic = 1
     case usage = 2

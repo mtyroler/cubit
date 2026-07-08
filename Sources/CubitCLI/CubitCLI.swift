@@ -3,8 +3,8 @@ import Foundation
 /// Top-level command dispatch. Renders a thrown `CLIError` to stderr and maps it to an exit
 /// code; unexpected errors become a generic failure.
 @MainActor
-enum CubitCLI {
-    static func run(_ arguments: [String]) async -> ExitCode {
+public enum CubitCLI {
+    public static func run(_ arguments: [String]) async -> ExitCode {
         do {
             return try await dispatch(arguments)
         } catch let error as CLIError {
