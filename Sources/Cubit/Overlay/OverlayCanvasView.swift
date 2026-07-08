@@ -118,9 +118,15 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     }
 
     private func drawFrozenBackground() {
-        guard let frozenImage else { return }
-        NSImage(cgImage: frozenImage, size: bounds.size)
-            .draw(in: bounds, from: .zero, operation: .copy, fraction: 1.0)
+        guard let frozenImage, let ctx = NSGraphicsContext.current?.cgContext else { return }
+        // The view is flipped (top-left origin); a CGImage drawn straight into it comes out
+        // upside down. Invert the y-axis over the view's own bounds before drawing so the
+        // snapshot fills this display's canvas the right way up.
+        ctx.saveGState()
+        ctx.translateBy(x: 0, y: bounds.height)
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(frozenImage, in: CGRect(origin: .zero, size: bounds.size))
+        ctx.restoreGState()
     }
 
     private func drawDim() {
