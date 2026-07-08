@@ -89,5 +89,10 @@ let package = Package(
             dependencies: ["Cubit"],
             path: "Tests/CubitCLITests"
         ),
+        .testTarget(
+            name: "CubitMCPTests",
+            dependencies: ["Cubit"],
+            path: "Tests/CubitMCPTests"
+        ),
     ]
 )
