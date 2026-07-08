@@ -5,3 +5,5 @@ build/
 DerivedData/
 *.xcscmblueprint
 *.xcworkspace/xcuserdata/
+RESUME-*.md
+.claude/
