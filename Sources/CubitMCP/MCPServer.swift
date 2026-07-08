@@ -5,27 +5,47 @@ import Foundation
 /// ImageRenderer, used by annotate, needs the main run loop) and the response is written back to
 /// stdout. Protocol traffic is stdout-only; diagnostics go to stderr.
 public final class MCPServer {
-    public init() {}
+    /// The filesystem root every agent-supplied path is confined to (see `PathSandbox`).
+    private let root: String
+    /// The channel protocol frames are written to. Defaults to real stdout;
+    /// `redirectStdoutToProtocolChannel()` swaps in the saved original fd after fd 1 is pointed
+    /// at stderr.
+    private var protocolOut = FileHandle.standardOutput
+
+    public init(root: String = FileManager.default.currentDirectoryPath) {
+        self.root = root
+    }
+
+    /// Guarantees stdout purity: duplicates the real stdout, then points fd 1 at stderr so ANY
+    /// stray write from AppKit / ScreenCaptureKit / a system framework goes to stderr and can't
+    /// corrupt the JSON-RPC stream. Protocol frames are written to the saved real stdout. Call
+    /// ONCE, before initializing NSApplication. Executable-entry-point only — not for tests.
+    public func redirectStdoutToProtocolChannel() {
+        let realStdout = dup(STDOUT_FILENO)
+        guard realStdout >= 0 else { return }
+        dup2(STDERR_FILENO, STDOUT_FILENO)
+        protocolOut = FileHandle(fileDescriptor: realStdout, closeOnDealloc: false)
+    }
 
     /// Runs until stdin reaches EOF, then returns. Call from a main-actor task under a live
     /// `NSApplication` run loop (see the `cubit-mcp` executable's entry point).
     @MainActor
     public func run() async {
-        let handler = MCPHandler()
+        let handler = MCPHandler(context: ToolContext(sandbox: PathSandbox(root: root)))
         for await line in Self.stdinLines() {
             if let response = handler.response(forLine: line) {
-                Self.write(response)
+                write(response)
             }
         }
     }
 
-    /// A single response line: the JSON bytes plus the framing newline. stdout writes are
-    /// serialized on the main actor.
+    /// A single response line: the JSON bytes plus the framing newline, written to the protocol
+    /// channel (never the redirected fd 1). Serialized on the main actor.
     @MainActor
-    private static func write(_ data: Data) {
+    private func write(_ data: Data) {
         var line = data
         line.append(MessageFraming.newline)
-        FileHandle.standardOutput.write(line)
+        protocolOut.write(line)
     }
 
     /// Reads stdin on a background thread and yields complete newline-delimited messages. Blocking

@@ -56,12 +56,12 @@ enum MCPTools {
 
     // MARK: - Dispatch
 
-    static func call(name: String, arguments: JSONValue?) -> ToolResult {
+    static func call(name: String, arguments: JSONValue?, context: ToolContext) -> ToolResult {
         do {
             switch name {
             case "list_windows": return try listWindows(arguments)
             case "measure_region": return try measureRegion(arguments)
-            case "annotate_screenshot": return try annotateScreenshot(arguments)
+            case "annotate_screenshot": return try annotateScreenshot(arguments, context: context)
             case "analyze_dead_space": return try analyzeDeadSpace(arguments)
             default: return .failure("unknown_tool: no tool named '\(name)'")
             }
@@ -70,21 +70,28 @@ enum MCPTools {
         }
     }
 
-    /// Maps a thrown error to a tagged tool-failure result. Permission denial gets its own
-    /// `permission_denied:` prefix so an agent can distinguish "grant Screen Recording" from a
-    /// bad-argument or not-found failure.
+    /// Maps a thrown error to a tagged tool-failure result. The tag lets an agent branch:
+    /// `permission_denied:` (grant Screen Recording), `forbidden:` (path outside the sandbox),
+    /// `too_large:` (input over a limit), `not_found:`, or `invalid_arguments:`.
     static func mapError(_ error: Error) -> ToolResult {
-        guard let cliError = error as? CLIError else {
+        switch error {
+        case let toolError as MCPToolError:
+            switch toolError {
+            case .forbidden(let message): return .failure("forbidden: " + message)
+            case .tooLarge(let message): return .failure("too_large: " + message)
+            }
+        case let cliError as CLIError:
+            let prefix: String
+            switch cliError.code {
+            case .permissionDenied: prefix = "permission_denied: "
+            case .notFound: prefix = "not_found: "
+            case .usage: prefix = "invalid_arguments: "
+            case .generic, .ok: prefix = "error: "
+            }
+            return .failure(prefix + cliError.message)
+        default:
             return .failure("error: \(error.localizedDescription)")
         }
-        let prefix: String
-        switch cliError.code {
-        case .permissionDenied: prefix = "permission_denied: "
-        case .notFound: prefix = "not_found: "
-        case .usage: prefix = "invalid_arguments: "
-        case .generic, .ok: prefix = "error: "
-        }
-        return .failure(prefix + cliError.message)
     }
 
     // MARK: - list_windows
@@ -112,6 +119,8 @@ enum MCPTools {
 
     static func measureRegion(_ arguments: JSONValue?) throws -> ToolResult {
         let args = try decodeArguments(arguments, as: MeasureArgs.self)
+        try validate(args.region)
+        if let rect = args.reference?.rect { try validate(rect) }
         // Canonical-space region: interpret input coordinates as points (scale 1 → no division).
         let measurement = try RegionsResolver.measurement(from: args.region, index: 0, scale: 1)
         let center = CanonicalPoint(
@@ -157,9 +166,15 @@ enum MCPTools {
         let scale: Double?
     }
 
-    static func annotateScreenshot(_ arguments: JSONValue?) throws -> ToolResult {
+    static func annotateScreenshot(_ arguments: JSONValue?, context: ToolContext) throws -> ToolResult {
         let args = try decodeArguments(arguments, as: AnnotateArgs.self)
-        let image = try loadImage(path: args.imagePath, base64: args.imageBase64)
+        guard args.regions.regions.count <= MCPLimits.maxRegions else {
+            throw MCPToolError.tooLarge("regions array has \(args.regions.regions.count) items; the limit is \(MCPLimits.maxRegions)")
+        }
+        for region in args.regions.regions { try validate(region) }
+        if let rect = args.regions.reference?.rect { try validate(rect) }
+
+        let image = try loadImage(path: args.imagePath, base64: args.imageBase64, sandbox: context.sandbox)
         let scale = try AnnotateCommand.resolveScale(
             flag: args.scale.map { formatScale($0) },
             document: args.regions.scale
@@ -187,18 +202,22 @@ enum MCPTools {
             throw CLIError(.generic, "cubit: failed to render annotated image")
         }
 
+        // Validate and canonicalize output paths through the sandbox BEFORE writing.
+        var resolvedOutput: String?
         var sidecarPath: String?
         if let outputPath = args.outputPath {
+            let outURL = try context.sandbox.resolveForWrite(outputPath)
             do {
-                try rendered.png.write(to: URL(fileURLWithPath: outputPath))
+                try rendered.png.write(to: outURL)
             } catch {
-                throw CLIError(.generic, "cubit: could not write \(outputPath): \(error.localizedDescription)")
+                throw CLIError(.generic, "cubit: could not write \(outURL.path): \(error.localizedDescription)")
             }
+            resolvedOutput = outURL.path
             if args.sidecar == true {
-                let url = AnnotateCommand.sidecarURL(forOutput: outputPath)
+                let sidecarURL = try context.sandbox.resolveForWrite(AnnotateCommand.sidecarURL(forOutput: outURL.path).path)
                 do {
-                    try rendered.sidecar.jsonData().write(to: url)
-                    sidecarPath = url.path
+                    try rendered.sidecar.jsonData().write(to: sidecarURL)
+                    sidecarPath = sidecarURL.path
                 } catch {
                     throw CLIError(.generic, "cubit: could not write sidecar: \(error.localizedDescription)")
                 }
@@ -206,7 +225,7 @@ enum MCPTools {
         }
 
         let doc = AnnotateResultDoc(
-            output: args.outputPath,
+            output: resolvedOutput,
             sidecarPath: sidecarPath,
             scale: Double(scale),
             measurementCount: resolved.measurements.count,
@@ -230,6 +249,11 @@ enum MCPTools {
 
     static func analyzeDeadSpace(_ arguments: JSONValue?) throws -> ToolResult {
         let args = try decodeArguments(arguments, as: DeadSpaceArgs.self)
+        guard args.content.count <= MCPLimits.maxRegions else {
+            throw MCPToolError.tooLarge("content array has \(args.content.count) items; the limit is \(MCPLimits.maxRegions)")
+        }
+        if let rect = args.target.rect { try validate(rect) }
+        for region in args.content { try validate(region) }
         let ref = try resolveReference(args.target, regionCenter: nil)
         guard ref.rect.area > 0 else {
             throw CLIError(.usage, "cubit: reference area must be positive to analyze dead space")
@@ -354,10 +378,15 @@ enum MCPTools {
         }
     }
 
-    static func loadImage(path: String?, base64: String?) throws -> CGImage {
+    static func loadImage(path: String?, base64: String?, sandbox: PathSandbox) throws -> CGImage {
         switch (path, base64) {
         case (let path?, nil):
-            return try ImageLoader.load(path: path)
+            // Confine to the sandbox root, then size-cap before decoding.
+            let url = try sandbox.resolveForRead(path)
+            if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > MCPLimits.maxImageFileBytes {
+                throw MCPToolError.tooLarge("image file is \(size) bytes; the limit is \(MCPLimits.maxImageFileBytes)")
+            }
+            return try ImageLoader.load(path: url.path)
         case (nil, let base64?):
             return try decodeImage(base64: base64)
         case (nil, nil):
@@ -370,14 +399,49 @@ enum MCPTools {
     static func decodeImage(base64: String) throws -> CGImage {
         // Tolerate a data: URL prefix and any embedded whitespace/newlines.
         let payload = base64.contains(",") ? String(base64.split(separator: ",", maxSplits: 1).last ?? "") : base64
+        // Reject an over-limit payload from its length BEFORE allocating the decoded buffer.
+        try ensureImageBase64WithinLimit(payload.count)
         guard let data = Data(base64Encoded: payload, options: [.ignoreUnknownCharacters]) else {
             throw CLIError(.usage, "cubit: imageBase64 is not valid base64")
+        }
+        guard data.count <= MCPLimits.maxDecodedImageBytes else {
+            throw MCPToolError.tooLarge("decoded image is \(data.count) bytes; the limit is \(MCPLimits.maxDecodedImageBytes)")
         }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             throw CLIError(.usage, "cubit: could not decode imageBase64 as an image")
         }
         return image
+    }
+
+    /// Rejects a base64 image whose DECODED size (estimated from the string length, 4 chars → 3
+    /// bytes) would exceed the limit, before any buffer is allocated.
+    static func ensureImageBase64WithinLimit(_ base64Length: Int) throws {
+        let estimatedBytes = base64Length / 4 * 3
+        guard estimatedBytes <= MCPLimits.maxDecodedImageBytes else {
+            throw MCPToolError.tooLarge("base64 image is ~\(estimatedBytes) bytes decoded; the limit is \(MCPLimits.maxDecodedImageBytes)")
+        }
+    }
+
+    // MARK: - Coordinate sanity
+
+    /// Rejects non-finite coordinates (NaN / infinity) on a region before it reaches the geometry
+    /// engine. JSON itself can't encode NaN/infinity, so this is defense-in-depth.
+    static func validate(_ region: RegionsInput.Region) throws {
+        if let rect = region.rect { try validate(rect) }
+        if let endpoints = region.endpoints {
+            for point in endpoints { try requireFinite([point.x, point.y], "endpoint") }
+        }
+    }
+
+    static func validate(_ rect: RegionsInput.Rect) throws {
+        try requireFinite([rect.x, rect.y, rect.width, rect.height], "rect")
+    }
+
+    static func requireFinite(_ values: [Double], _ what: String) throws {
+        for value in values where !value.isFinite {
+            throw CLIError(.usage, "cubit: \(what) has a non-finite coordinate")
+        }
     }
 
     static func canonicalRect(_ rect: RegionsInput.Rect) -> CanonicalRect {

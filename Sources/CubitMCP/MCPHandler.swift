@@ -9,6 +9,17 @@ final class MCPHandler {
     /// The MCP protocol revision this server implements.
     static let protocolVersion = "2025-06-18"
 
+    let context: ToolContext
+
+    init(context: ToolContext) {
+        self.context = context
+    }
+
+    /// Convenience for tests and default construction: sandbox rooted at the current directory.
+    convenience init() {
+        self.init(context: ToolContext(sandbox: PathSandbox(root: FileManager.default.currentDirectoryPath)))
+    }
+
     /// Parses and dispatches one line. Returns the response bytes (no trailing newline), or nil
     /// when no response is due (a notification). Never throws — every failure becomes a
     /// JSON-RPC error response so the read loop can't be killed by a bad message.
@@ -57,7 +68,7 @@ final class MCPHandler {
         guard let name = params?["name"]?.stringValue else {
             return failure(id: id, code: .invalidParams, message: "Invalid params: 'name' is required for tools/call")
         }
-        let result = MCPTools.call(name: name, arguments: params?["arguments"])
+        let result = MCPTools.call(name: name, arguments: params?["arguments"], context: context)
         return success(id: id, result: result)
     }
 

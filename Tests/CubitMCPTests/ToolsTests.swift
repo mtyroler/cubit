@@ -5,9 +5,11 @@ import XCTest
 /// error-mapping paths an agent depends on. Nothing here needs live TCC or capture.
 @MainActor
 final class ToolsTests: XCTestCase {
+    private let context = ToolContext(sandbox: PathSandbox(root: FileManager.default.currentDirectoryPath))
+
     /// Calls a tool and returns (result, decoded first text-content JSON).
     private func call(_ name: String, _ json: String) throws -> (ToolResult, JSONValue) {
-        let result = MCPTools.call(name: name, arguments: try JSONValue.parse(json))
+        let result = MCPTools.call(name: name, arguments: try JSONValue.parse(json), context: context)
         let text = try XCTUnwrap(result.content.first { $0.type == "text" }?.text)
         return (result, try JSONValue.parse(Data(text.utf8)))
     }
@@ -51,7 +53,7 @@ final class ToolsTests: XCTestCase {
     }
 
     func testMeasureRegionMissingRegionIsInvalidArguments() throws {
-        let result = MCPTools.call(name: "measure_region", arguments: .object([:]))
+        let result = MCPTools.call(name: "measure_region", arguments: .object([:]), context: context)
         XCTAssertTrue(result.isError)
         let message = try XCTUnwrap(result.content.first?.text)
         XCTAssertTrue(message.hasPrefix("invalid_arguments:"), message)
@@ -62,7 +64,7 @@ final class ToolsTests: XCTestCase {
         let result = MCPTools.call(name: "measure_region", arguments: try! JSONValue.parse(#"""
         { "region": { "kind": "horizontal", "endpoints": [ { "x": 200, "y": 900 }, { "x": 1400, "y": 905 } ] },
           "reference": { "rect": { "x": 0, "y": 0, "width": 2400, "height": 1600 } } }
-        """#))
+        """#), context: context)
         XCTAssertTrue(result.isError)
         XCTAssertTrue(result.content.first?.text?.hasPrefix("invalid_arguments:") ?? false)
     }
@@ -105,7 +107,7 @@ final class ToolsTests: XCTestCase {
     // MARK: errors & dispatch
 
     func testUnknownToolIsError() {
-        let result = MCPTools.call(name: "nope", arguments: .object([:]))
+        let result = MCPTools.call(name: "nope", arguments: .object([:]), context: context)
         XCTAssertTrue(result.isError)
         XCTAssertTrue(result.content.first?.text?.hasPrefix("unknown_tool:") ?? false)
     }
