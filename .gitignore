@@ -3,6 +3,8 @@ xcuserdata/
 .DS_Store
 build/
 DerivedData/
+.build/
+.swiftpm/
 *.xcscmblueprint
 *.xcworkspace/xcuserdata/
 RESUME-*.md

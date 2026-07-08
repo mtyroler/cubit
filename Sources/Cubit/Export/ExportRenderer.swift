@@ -236,6 +236,51 @@ enum ExportRenderer {
         return RenderedExport(png: png, sidecar: sidecar)
     }
 
+    /// Renders annotations onto an already-decoded image with NO crop policy applied — the
+    /// whole image is the canvas. This is what the `cubit annotate` CLI consumes so its output
+    /// matches an app export pixel-for-pixel: same layout engine, same SwiftUI drawing, same
+    /// metadata-free PNG encoding. `cropRect` is the canonical rect the image occupies (its
+    /// origin anchors pixel (0,0); the CLI passes (0, 0, image.width/scale, image.height/scale)).
+    /// A non-`.screen` `reference.mode` draws the reference outline; `.screen` omits it.
+    static func renderAnnotatedExport(
+        image: CGImage,
+        cropRect: CanonicalRect,
+        scale: CGFloat,
+        measurements: [Measurement],
+        reference: ResolvedReference,
+        markup: MarkupStyle = .default,
+        showTotals: Bool = false
+    ) -> RenderedExport? {
+        let pointSize = CGSize(width: CGFloat(image.width) / scale, height: CGFloat(image.height) / scale)
+        let geo = ExportGeometry(
+            image: image,
+            cropRect: cropRect,
+            pointSize: pointSize,
+            pixelWidth: image.width,
+            pixelHeight: image.height,
+            styled: false,
+            isOpaque: true
+        )
+        guard let cg = renderCGImage(
+            geometry: geo,
+            measurements: measurements,
+            reference: reference,
+            scale: scale,
+            metadata: ExportMetadata(),
+            markup: markup,
+            showTotals: showTotals
+        ), let png = pngData(from: cg) else { return nil }
+
+        let sidecar = self.sidecar(
+            geometry: geo,
+            measurements: measurements,
+            reference: reference,
+            scale: scale,
+            showTotals: showTotals
+        )
+        return RenderedExport(png: png, sidecar: sidecar)
+    }
+
     /// Builds the sidecar from the shared crop geometry. Totals mirror the legend exactly:
     /// present only when the export shows them.
     static func sidecar(
