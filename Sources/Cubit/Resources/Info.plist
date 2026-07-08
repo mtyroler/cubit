@@ -28,5 +28,7 @@
 	<string>© Cubit contributors</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Cubit captures the screen so your measurements can annotate a frozen snapshot and export a marked-up image. Nothing leaves your Mac.</string>
 </dict>
 </plist>

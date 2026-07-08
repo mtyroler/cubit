@@ -6,6 +6,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var converter: CoordinateConverter?
     var display: DisplayDescriptor?
     var session: MeasurementSession?
+    var frozenImage: CGImage? { didSet { needsDisplay = true } }
     var provider: WindowInfoProviding?
     var screenRects: [CanonicalRect] = []
     var excludedPID: pid_t = 0
@@ -95,6 +96,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     // MARK: Drawing
 
     override func draw(_ dirtyRect: CGRect) {
+        drawFrozenBackground()
         drawDim()
 
         guard let session, let converter, let display else { return }
@@ -113,6 +115,12 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         if let rect = session.draftRect, let draft = session.draft {
             drawMeasurement(kind: draft.kind, rect: rect, converter: converter, display: display, color: .controlAccentColor)
         }
+    }
+
+    private func drawFrozenBackground() {
+        guard let frozenImage else { return }
+        NSImage(cgImage: frozenImage, size: bounds.size)
+            .draw(in: bounds, from: .zero, operation: .copy, fraction: 1.0)
     }
 
     private func drawDim() {
