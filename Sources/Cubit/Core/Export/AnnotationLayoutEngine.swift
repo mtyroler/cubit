@@ -20,6 +20,13 @@ enum AnnotationLayoutEngine {
     static let legendLabelValueGap: CGFloat = 12
     static let legendCoverageFlipRatio: CGFloat = 0.30
 
+    // M6b metadata footer (8pt grid).
+    static let footerHairlineHeight: CGFloat = 1
+    static let footerPadding: CGFloat = 16
+    static let footerColumnGap: CGFloat = 24
+    static let footerCaptionLineGap: CGFloat = 4
+    static let footerLineSpacing: CGFloat = 2
+
     static func layout(_ request: LayoutRequest, measuring: TextMeasuring) -> ExportLayout {
         let bounds = CGRect(origin: .zero, size: request.imageSize)
         let cropOrigin = request.cropRect.origin
@@ -51,12 +58,20 @@ enum AnnotationLayoutEngine {
             ? nil
             : translate(request.referenceRect, cropOrigin: cropOrigin)
 
+        let footer = layoutFooter(request.metadataFooter, imageSize: request.imageSize, measuring: measuring)
+        let canvasSize = CGSize(
+            width: request.imageSize.width,
+            height: request.imageSize.height + (footer?.frame.height ?? 0)
+        )
+
         return ExportLayout(
             imageSize: request.imageSize,
+            canvasSize: canvasSize,
             shapes: shapes,
             callouts: callouts,
             legend: legend,
-            referenceOutline: referenceOutline
+            referenceOutline: referenceOutline,
+            footer: footer
         )
     }
 
@@ -287,11 +302,13 @@ enum AnnotationLayoutEngine {
     }
 
     /// Exact card size: padding, header, one row per measurement, footer (wordmark +
-    /// reserved metadata), with `legendRowSpacing` between every stacked element.
+    /// reserved metadata), with `legendRowSpacing` between every stacked element. The
+    /// wordmark row (and its gap) is omitted entirely when `wordmark` is empty — the M6b
+    /// footer owns the wordmark instead, and exactly one copy is ever drawn.
     static func legendSize(_ input: LegendInput, measuring: TextMeasuring) -> CGSize {
         let header = measuring.size(of: input.headerText, role: .legendHeader)
         var maxContentWidth = header.width
-        var totalHeight = header.height
+        var elementHeights: [CGFloat] = [header.height]
 
         for row in input.rows {
             let label = measuring.size(of: row.labelText, role: .legendLabel)
@@ -299,22 +316,62 @@ enum AnnotationLayoutEngine {
             let rowHeight = max(legendSwatch, max(label.height, value.height))
             let rowWidth = legendSwatch + legendSwatchGap + label.width + legendLabelValueGap + value.width
             maxContentWidth = max(maxContentWidth, rowWidth)
-            totalHeight += rowHeight
+            elementHeights.append(rowHeight)
         }
 
-        let wordmark = measuring.size(of: input.wordmark, role: .wordmark)
-        let footerHeight = wordmark.height + input.metadataHeight
-        maxContentWidth = max(maxContentWidth, wordmark.width)
-        totalHeight += footerHeight
+        let hasWordmark = !input.wordmark.isEmpty
+        if hasWordmark || input.metadataHeight > 0 {
+            let wordmark = measuring.size(of: input.wordmark, role: .wordmark)
+            let footerHeight = wordmark.height + input.metadataHeight
+            maxContentWidth = max(maxContentWidth, wordmark.width)
+            elementHeights.append(footerHeight)
+        }
 
-        // Gaps between header, each row, and the footer.
-        let gapCount = 1 + input.rows.count
-        totalHeight += legendRowSpacing * CGFloat(gapCount)
+        let totalHeight = elementHeights.reduce(0, +)
+            + legendRowSpacing * CGFloat(max(0, elementHeights.count - 1))
 
         return CGSize(
             width: maxContentWidth + legendPadding * 2,
             height: totalHeight + legendPadding * 2
         )
+    }
+
+    // MARK: - Metadata footer
+
+    private static func layoutFooter(
+        _ input: MetadataFooterInput?,
+        imageSize: CGSize,
+        measuring: TextMeasuring
+    ) -> FooterGeometry? {
+        guard let input, !input.columns.isEmpty else { return nil }
+        let height = footerHeight(input, measuring: measuring)
+        guard height > 0 else { return nil }
+        let frame = CGRect(x: 0, y: imageSize.height, width: imageSize.width, height: height)
+        return FooterGeometry(frame: frame, columns: input.columns, wordmark: input.wordmark)
+    }
+
+    /// Pure function of the enabled categories and their line counts. Zero when there are
+    /// no columns — the canvas height is then identical to `imageSize.height`.
+    static func footerHeight(_ input: MetadataFooterInput?, measuring: TextMeasuring) -> CGFloat {
+        guard let input, !input.columns.isEmpty else { return 0 }
+
+        var maxColumnHeight: CGFloat = 0
+        for column in input.columns {
+            var height = measuring.size(of: column.caption, role: .footerCaption).height
+            height += footerCaptionLineGap
+            for (index, line) in column.lines.enumerated() {
+                if index > 0 { height += footerLineSpacing }
+                height += measuring.size(of: line, role: .footerLine).height
+            }
+            maxColumnHeight = max(maxColumnHeight, height)
+        }
+
+        let wordmarkHeight = input.wordmark.isEmpty
+            ? 0
+            : measuring.size(of: input.wordmark, role: .wordmark).height
+        let contentHeight = max(maxColumnHeight, wordmarkHeight)
+
+        return footerHairlineHeight + footerPadding * 2 + contentHeight
     }
 
     private static func coversTooMuch(_ frame: CGRect, shapes: [ShapeGeometry]) -> Bool {

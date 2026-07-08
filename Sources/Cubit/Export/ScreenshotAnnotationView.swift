@@ -18,28 +18,36 @@ struct ScreenshotAnnotationView: View {
     let image: CGImage
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Image(decorative: image, scale: 1, orientation: .up)
-                .resizable()
+        VStack(spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                Image(decorative: image, scale: 1, orientation: .up)
+                    .resizable()
+                    .frame(width: layout.imageSize.width, height: layout.imageSize.height)
+
+                Canvas { context, _ in
+                    drawReferenceOutline(in: context)
+                    for shape in layout.shapes { drawShape(shape, in: context) }
+                    for callout in layout.callouts { drawLeader(callout, in: context) }
+                }
                 .frame(width: layout.imageSize.width, height: layout.imageSize.height)
 
-            Canvas { context, _ in
-                drawReferenceOutline(in: context)
-                for shape in layout.shapes { drawShape(shape, in: context) }
-                for callout in layout.callouts { drawLeader(callout, in: context) }
+                ForEach(layout.callouts) { callout in
+                    CalloutPill(callout: callout)
+                        .position(x: callout.frame.midX, y: callout.frame.midY)
+                }
+
+                LegendCard(legend: layout.legend)
+                    .frame(width: layout.legend.frame.width, height: layout.legend.frame.height)
+                    .position(x: layout.legend.frame.midX, y: layout.legend.frame.midY)
             }
             .frame(width: layout.imageSize.width, height: layout.imageSize.height)
 
-            ForEach(layout.callouts) { callout in
-                CalloutPill(callout: callout)
-                    .position(x: callout.frame.midX, y: callout.frame.midY)
+            if let footer = layout.footer {
+                MetadataFooterView(footer: footer)
+                    .frame(width: footer.frame.width, height: footer.frame.height)
             }
-
-            LegendCard(legend: layout.legend)
-                .frame(width: layout.legend.frame.width, height: layout.legend.frame.height)
-                .position(x: layout.legend.frame.midX, y: layout.legend.frame.midY)
         }
-        .frame(width: layout.imageSize.width, height: layout.imageSize.height)
+        .frame(width: layout.canvasSize.width, height: layout.canvasSize.height)
     }
 
     // MARK: Canvas marks
@@ -173,13 +181,15 @@ private struct LegendCard: View {
                 }
             }
 
-            HStack(spacing: 4) {
-                Image(systemName: "cube")
-                    .font(.system(size: 10, weight: .bold))
-                Text(legend.wordmark)
-                    .font(ExportFontRole.wordmark.font)
+            if !legend.wordmark.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "cube")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(legend.wordmark)
+                        .font(ExportFontRole.wordmark.font)
+                }
+                .foregroundStyle(.tertiary)
             }
-            .foregroundStyle(.tertiary)
 
             if legend.metadataHeight > 0 {
                 Color.clear.frame(height: legend.metadataHeight)

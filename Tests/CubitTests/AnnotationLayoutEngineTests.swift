@@ -245,4 +245,120 @@ final class AnnotationLayoutEngineTests: XCTestCase {
         )
         XCTAssertEqual(layout.referenceOutline, CGRect(x: 20, y: 20, width: 300, height: 200))
     }
+
+    // MARK: - M6b metadata footer
+
+    func testFooterHeightZeroWhenMetadataNil() {
+        XCTAssertEqual(AnnotationLayoutEngine.footerHeight(nil, measuring: measuring), 0)
+    }
+
+    func testFooterHeightZeroWhenNoColumns() {
+        let input = MetadataFooterInput(columns: [], wordmark: "Cubit")
+        XCTAssertEqual(AnnotationLayoutEngine.footerHeight(input, measuring: measuring), 0)
+    }
+
+    func testFooterHeightExactForOneCategoryTwoLines() {
+        // caption 14 + gap 4 + 2 lines (14 each) + 1 line-spacing 2 = 48; wordmark 14 -> content max 48.
+        let input = MetadataFooterInput(
+            columns: [MetadataFooterColumnInput(caption: "Machine", lines: ["line one", "line two"])],
+            wordmark: "Cubit"
+        )
+        let expected = AnnotationLayoutEngine.footerHairlineHeight
+            + AnnotationLayoutEngine.footerPadding * 2
+            + 48
+        XCTAssertEqual(AnnotationLayoutEngine.footerHeight(input, measuring: measuring), expected, accuracy: accuracy)
+    }
+
+    func testFooterHeightUsesTallestColumnAcrossTwoCategories() {
+        let input = MetadataFooterInput(
+            columns: [
+                MetadataFooterColumnInput(caption: "Machine", lines: ["a"]),           // 14+4+14 = 32
+                MetadataFooterColumnInput(caption: "Window", lines: ["a", "b", "c"])    // 14+4+14+2+14+2+14 = 64
+            ],
+            wordmark: "Cubit"
+        )
+        let expected = AnnotationLayoutEngine.footerHairlineHeight
+            + AnnotationLayoutEngine.footerPadding * 2
+            + 64
+        XCTAssertEqual(AnnotationLayoutEngine.footerHeight(input, measuring: measuring), expected, accuracy: accuracy)
+    }
+
+    func testFooterHeightThreeCategoriesMatchesTallestOfThree() {
+        let input = MetadataFooterInput(
+            columns: [
+                MetadataFooterColumnInput(caption: "Machine", lines: ["a", "b"]),   // 48
+                MetadataFooterColumnInput(caption: "Window", lines: ["a", "b", "c"]), // 64
+                MetadataFooterColumnInput(caption: "App", lines: ["a"])              // 32
+            ],
+            wordmark: "Cubit"
+        )
+        let expected = AnnotationLayoutEngine.footerHairlineHeight
+            + AnnotationLayoutEngine.footerPadding * 2
+            + 64
+        XCTAssertEqual(AnnotationLayoutEngine.footerHeight(input, measuring: measuring), expected, accuracy: accuracy)
+    }
+
+    func testCanvasSizeUnchangedWhenNoFooter() {
+        let layout = AnnotationLayoutEngine.layout(
+            request(image: CGSize(width: 400, height: 300), callouts: []),
+            measuring: measuring
+        )
+        XCTAssertNil(layout.footer)
+        XCTAssertEqual(layout.canvasSize, CGSize(width: 400, height: 300))
+    }
+
+    func testCanvasSizeGrowsByFooterHeightWhenPresent() {
+        var req = request(image: CGSize(width: 400, height: 300), callouts: [])
+        req.metadataFooter = MetadataFooterInput(
+            columns: [MetadataFooterColumnInput(caption: "Machine", lines: ["a"])],
+            wordmark: "Cubit"
+        )
+        let layout = AnnotationLayoutEngine.layout(req, measuring: measuring)
+        XCTAssertNotNil(layout.footer)
+        let footerHeight = layout.canvasSize.height - layout.imageSize.height
+        XCTAssertGreaterThan(footerHeight, 0)
+        XCTAssertEqual(layout.footer?.frame.height ?? 0, footerHeight, accuracy: accuracy)
+        XCTAssertEqual(layout.footer?.frame.origin.y ?? 0, layout.imageSize.height, accuracy: accuracy)
+        XCTAssertEqual(layout.footer?.frame.width ?? 0, layout.imageSize.width, accuracy: accuracy)
+    }
+
+    func testGeometryAboveFooterLineUnaffectedByFooterPresence() {
+        let rect = CanonicalRect(x: 400, y: 300, width: 200, height: 150)
+        let plainLayout = AnnotationLayoutEngine.layout(
+            request(image: CGSize(width: 1000, height: 800), callouts: [rectCallout(rect)]),
+            measuring: measuring
+        )
+
+        var footerReq = request(image: CGSize(width: 1000, height: 800), callouts: [rectCallout(rect)])
+        footerReq.metadataFooter = MetadataFooterInput(
+            columns: [MetadataFooterColumnInput(caption: "Machine", lines: ["a", "b"])],
+            wordmark: "Cubit"
+        )
+        let footerLayout = AnnotationLayoutEngine.layout(footerReq, measuring: measuring)
+
+        XCTAssertEqual(plainLayout.callouts[0].frame, footerLayout.callouts[0].frame)
+        XCTAssertEqual(plainLayout.legend.frame, footerLayout.legend.frame)
+        XCTAssertEqual(plainLayout.imageSize, footerLayout.imageSize)
+    }
+
+    // MARK: - Legend wordmark suppression (footer owns the single wordmark)
+
+    func testLegendSizeOmitsWordmarkRowWhenWordmarkEmpty() {
+        let withWordmark = LegendInput(
+            headerText: "REF",
+            rows: [LegendRowInput(colorIndex: 0, labelText: "AB", valueText: "CDEF")],
+            wordmark: "Cubit",
+            metadataHeight: 0
+        )
+        let withoutWordmark = LegendInput(
+            headerText: "REF",
+            rows: [LegendRowInput(colorIndex: 0, labelText: "AB", valueText: "CDEF")],
+            wordmark: "",
+            metadataHeight: 0
+        )
+        let sizeWith = AnnotationLayoutEngine.legendSize(withWordmark, measuring: measuring)
+        let sizeWithout = AnnotationLayoutEngine.legendSize(withoutWordmark, measuring: measuring)
+        // Dropping the footer row removes one row height (14) and one gap (8).
+        XCTAssertEqual(sizeWith.height - sizeWithout.height, 22, accuracy: accuracy)
+    }
 }

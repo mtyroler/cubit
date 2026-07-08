@@ -12,10 +12,13 @@ enum ExportRenderer {
     static let cropPadding: CGFloat = 48
 
     /// Renders the annotated image as a CGImage at the display's native pixel resolution.
+    /// `metadata` is empty by default — exports carry zero identifying content unless the
+    /// caller explicitly opts in (M6b).
     static func renderCGImage(
         measurements: [Measurement],
         reference: ResolvedReference,
-        captured: CapturedDisplay
+        captured: CapturedDisplay,
+        metadata: ExportMetadata = ExportMetadata()
     ) -> CGImage? {
         let scale = captured.scale
         let displayFrame = captured.canonicalFrame
@@ -50,7 +53,8 @@ enum ExportRenderer {
             reference: reference,
             scale: scale,
             cropRect: cropForEngine,
-            imageSize: pointSize
+            imageSize: pointSize,
+            metadata: metadata
         )
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
@@ -61,13 +65,21 @@ enum ExportRenderer {
         return renderer.cgImage
     }
 
-    /// Renders and encodes to metadata-free PNG data.
+    /// Renders and encodes to metadata-free PNG data. "Metadata-free" refers to the PNG
+    /// container (no EXIF/DPI/text chunks) and is unrelated to the optional `metadata`
+    /// imprint, which — when non-empty — is baked into the pixels themselves as a footer.
     static func renderPNG(
         measurements: [Measurement],
         reference: ResolvedReference,
-        captured: CapturedDisplay
+        captured: CapturedDisplay,
+        metadata: ExportMetadata = ExportMetadata()
     ) -> Data? {
-        guard let image = renderCGImage(measurements: measurements, reference: reference, captured: captured) else {
+        guard let image = renderCGImage(
+            measurements: measurements,
+            reference: reference,
+            captured: captured,
+            metadata: metadata
+        ) else {
             return nil
         }
         return pngData(from: image)
@@ -102,7 +114,8 @@ enum ExportRenderer {
         reference: ResolvedReference,
         scale: CGFloat,
         cropRect: CanonicalRect,
-        imageSize: CGSize
+        imageSize: CGSize,
+        metadata: ExportMetadata
     ) -> LayoutRequest {
         var callouts: [CalloutInput] = []
         var rows: [LegendRowInput] = []
@@ -129,10 +142,13 @@ enum ExportRenderer {
             ))
         }
 
+        // Exactly one wordmark ever renders: the footer owns it when metadata is present,
+        // otherwise it stays in the legend card.
+        let hasFooter = !metadata.isEmpty
         let legend = LegendInput(
             headerText: reference.descriptor,
             rows: rows,
-            wordmark: "Cubit",
+            wordmark: hasFooter ? "" : "Cubit",
             metadataHeight: 0
         )
         return LayoutRequest(
@@ -141,8 +157,23 @@ enum ExportRenderer {
             referenceRect: reference.rect,
             referenceMode: reference.mode,
             callouts: callouts,
-            legend: legend
+            legend: legend,
+            metadataFooter: hasFooter ? metadataFooter(from: metadata) : nil
         )
+    }
+
+    private static func metadataFooter(from metadata: ExportMetadata) -> MetadataFooterInput {
+        var columns: [MetadataFooterColumnInput] = []
+        if let machine = metadata.machine {
+            columns.append(MetadataFooterColumnInput(caption: "Machine", lines: machine.lines))
+        }
+        if let window = metadata.window {
+            columns.append(MetadataFooterColumnInput(caption: "Window", lines: window.lines))
+        }
+        if let app = metadata.app {
+            columns.append(MetadataFooterColumnInput(caption: "App", lines: app.lines))
+        }
+        return MetadataFooterInput(columns: columns, wordmark: "Cubit")
     }
 
     static func primaryText(_ metrics: Metrics) -> String {

@@ -6,8 +6,37 @@ struct ExportMenuView: View {
     var onSave: () -> Void
     var onCopy: () -> Void
     var dragProvider: () -> NSItemProvider?
+    /// Toggle state saved from a prior "Remember" — off by default for every fresh user.
+    var initialToggles: MetadataToggles
+    /// Fired on every toggle/remember flip so the caller can track the pending (possibly
+    /// one-shot) selection and, when `remember` is true, persist it.
+    var onMetadataChange: (MetadataToggles, _ remember: Bool) -> Void
 
-    @State private var includeMetadata = false
+    @State private var machine: Bool
+    @State private var window: Bool
+    @State private var app: Bool
+    @State private var remember = false
+
+    init(
+        onSave: @escaping () -> Void,
+        onCopy: @escaping () -> Void,
+        dragProvider: @escaping () -> NSItemProvider?,
+        initialToggles: MetadataToggles = .allOff,
+        onMetadataChange: @escaping (MetadataToggles, Bool) -> Void = { _, _ in }
+    ) {
+        self.onSave = onSave
+        self.onCopy = onCopy
+        self.dragProvider = dragProvider
+        self.initialToggles = initialToggles
+        self.onMetadataChange = onMetadataChange
+        _machine = State(initialValue: initialToggles.machine)
+        _window = State(initialValue: initialToggles.window)
+        _app = State(initialValue: initialToggles.app)
+    }
+
+    private var currentToggles: MetadataToggles {
+        MetadataToggles(machine: machine, window: window, app: app)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -37,14 +66,30 @@ struct ExportMenuView: View {
 
             Divider().padding(.vertical, 2)
 
-            Toggle(isOn: $includeMetadata) {
-                Text("Include capture metadata")
+            Text("METADATA")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 2)
+                .padding(.bottom, 2)
+
+            metadataToggle("Machine", isOn: $machine)
+            metadataToggle("Window", isOn: $window)
+            metadataToggle("App", isOn: $app)
+
+            Divider().padding(.vertical, 2)
+
+            Toggle(isOn: $remember) {
+                Text("Remember for next time")
                     .font(.system(size: 11))
             }
             .toggleStyle(.checkbox)
-            .disabled(true)
-            .help("Coming soon")
+            .onChange(of: remember) { _, newValue in
+                onMetadataChange(currentToggles, newValue)
+            }
         }
+        .onChange(of: machine) { _, _ in onMetadataChange(currentToggles, remember) }
+        .onChange(of: window) { _, _ in onMetadataChange(currentToggles, remember) }
+        .onChange(of: app) { _, _ in onMetadataChange(currentToggles, remember) }
         .padding(10)
         .frame(width: 208)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -52,6 +97,14 @@ struct ExportMenuView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(.white.opacity(0.1), lineWidth: 1)
         )
+    }
+
+    private func metadataToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Text(title)
+                .font(.system(size: 11))
+        }
+        .toggleStyle(.checkbox)
     }
 
     private func row(action: @escaping () -> Void, symbol: String, title: String, hint: String) -> some View {

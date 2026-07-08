@@ -19,7 +19,8 @@ enum ReferenceFrameResolver {
                 return ResolvedReference(
                     rect: window.canonicalBounds,
                     mode: .windowUnderCursor,
-                    descriptor: windowDescriptor(window)
+                    descriptor: windowDescriptor(window),
+                    window: window
                 )
             }
             return screenReference(at: cursor, screens: screens)
