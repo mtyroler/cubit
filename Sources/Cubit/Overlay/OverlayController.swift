@@ -33,19 +33,29 @@ final class OverlayController {
 
         let primaryDescriptor = Self.descriptor(for: screens[0])
         let session = MeasurementSession(
-            reference: converter.canonicalFrame(of: primaryDescriptor),
+            screenReference: converter.canonicalFrame(of: primaryDescriptor),
             scale: primaryDescriptor.scale
         )
         self.session = session
         appState.draftPercent = nil
 
+        let screenRects = screens
+            .map(Self.descriptor(for:))
+            .map(converter.canonicalFrame(of:))
+        let provider = CGWindowInfoProvider()
+        let excludedPID = getpid()
+
         for screen in screens {
             let descriptor = Self.descriptor(for: screen)
             let window = OverlayWindow(contentRect: screen.frame)
+            window.acceptsMouseMovedEvents = true
             let canvas = OverlayCanvasView(frame: CGRect(origin: .zero, size: screen.frame.size))
             canvas.converter = converter
             canvas.display = descriptor
             canvas.session = session
+            canvas.provider = provider
+            canvas.screenRects = screenRects
+            canvas.excludedPID = excludedPID
             canvas.onDismiss = { [weak self] in self?.dismiss() }
             canvas.onDraftChanged = { [weak self] in self?.updateAppState() }
             canvas.installHUD()

@@ -12,15 +12,63 @@ final class MeasurementSession {
         var fromCenter: Bool
     }
 
-    var reference: CanonicalRect
+    struct CustomDraft: Equatable {
+        var anchor: CanonicalPoint
+        var current: CanonicalPoint
+    }
+
     var referenceScale: CGFloat
+    var mode: ReferenceMode
+    var resolved: ResolvedReference
+    var customRect: CanonicalRect?
+    var isDrawingCustom = false
+    var customDraft: CustomDraft?
+
     var tool: MeasurementKind = .rectangle
     var measurements: [Measurement] = []
     var draft: Draft?
 
-    init(reference: CanonicalRect, scale: CGFloat) {
-        self.reference = reference
+    private let fallbackRect: CanonicalRect
+
+    init(screenReference: CanonicalRect, scale: CGFloat, mode: ReferenceMode = .windowUnderCursor) {
+        self.fallbackRect = screenReference
         self.referenceScale = scale
+        self.mode = mode
+        self.resolved = ResolvedReference(
+            rect: screenReference,
+            mode: .screen,
+            descriptor: "Screen — \(Int(screenReference.width.rounded()))×\(Int(screenReference.height.rounded()))"
+        )
+    }
+
+    var reference: CanonicalRect { resolved.rect }
+
+    /// Recompute the active reference against the current cursor and mode.
+    func resolveReference(
+        cursor: CanonicalPoint,
+        screens: [CanonicalRect],
+        provider: WindowInfoProviding,
+        excludedPID: pid_t
+    ) {
+        resolved = ReferenceFrameResolver.resolve(
+            mode: mode,
+            cursor: cursor,
+            screens: screens.isEmpty ? [fallbackRect] : screens,
+            customRect: customRect,
+            provider: provider,
+            excludedPID: excludedPID
+        )
+    }
+
+    func cycleMode() {
+        mode = mode.next
+        isDrawingCustom = false
+        customDraft = nil
+    }
+
+    func beginCustomDraw() {
+        isDrawingCustom = true
+        customDraft = nil
     }
 
     var draftRect: CanonicalRect? {
@@ -31,6 +79,17 @@ final class MeasurementSession {
             kind: draft.kind,
             constrain: draft.constrain,
             fromCenter: draft.fromCenter
+        )
+    }
+
+    var customDraftRect: CanonicalRect? {
+        guard let customDraft else { return nil }
+        return MeasurementEngine.draftRect(
+            anchor: customDraft.anchor,
+            current: customDraft.current,
+            kind: .rectangle,
+            constrain: false,
+            fromCenter: false
         )
     }
 
@@ -72,6 +131,32 @@ final class MeasurementSession {
 
     func cancelDraft() {
         draft = nil
+    }
+
+    // MARK: Custom reference drawing
+
+    func beginCustomDraft(at anchor: CanonicalPoint) {
+        customDraft = CustomDraft(anchor: anchor, current: anchor)
+    }
+
+    func updateCustomDraft(to current: CanonicalPoint) {
+        guard var customDraft else { return }
+        customDraft.current = current
+        self.customDraft = customDraft
+    }
+
+    /// Finish a custom-reference drag. Adopts the drawn rect when it is large enough
+    /// and switches to `.custom` mode; a too-small drag is discarded.
+    @discardableResult
+    func commitCustomDraft(minDrag: CGFloat = 3) -> Bool {
+        defer { isDrawingCustom = false; customDraft = nil }
+        guard let customDraft, let rect = customDraftRect else { return false }
+        let dx = customDraft.current.x - customDraft.anchor.x
+        let dy = customDraft.current.y - customDraft.anchor.y
+        guard (dx * dx + dy * dy).squareRoot() >= minDrag else { return false }
+        customRect = rect
+        mode = .custom
+        return true
     }
 
     func undo() {

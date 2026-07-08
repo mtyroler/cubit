@@ -5,24 +5,41 @@ struct HUDView: View {
 
     var body: some View {
         if let draft = session.draft, let rect = session.draftRect {
-            let metrics = MeasurementEngine.metrics(
-                kind: draft.kind,
-                rect: rect,
-                reference: session.reference,
-                scale: session.referenceScale
-            )
-            VStack(alignment: .leading, spacing: 4) {
-                toolGlyphs(active: draft.kind)
-                Text(primaryLine(kind: draft.kind, rect: rect, metrics: metrics))
-                    .font(.system(size: 12, weight: .medium).monospacedDigit())
-                Text(referenceLine())
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            .padding(8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .fixedSize()
+            fullCard(draft: draft, rect: rect)
+        } else {
+            referenceChip(faded: true)
         }
+    }
+
+    private func fullCard(draft: MeasurementSession.Draft, rect: CanonicalRect) -> some View {
+        let metrics = MeasurementEngine.metrics(
+            kind: draft.kind,
+            rect: rect,
+            reference: session.reference,
+            scale: session.referenceScale
+        )
+        return VStack(alignment: .leading, spacing: 4) {
+            toolGlyphs(active: draft.kind)
+            Text(primaryLine(kind: draft.kind, rect: rect, metrics: metrics))
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
+            referenceLine()
+                .font(.system(size: 11).monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .fixedSize()
+    }
+
+    private func referenceChip(faded: Bool) -> some View {
+        referenceLine()
+            .font(.system(size: 11, weight: .medium).monospacedDigit())
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(.regularMaterial, in: Capsule())
+            .opacity(faded ? 0.85 : 1)
+            .fixedSize()
     }
 
     private func toolGlyphs(active: MeasurementKind) -> some View {
@@ -50,8 +67,20 @@ struct HUDView: View {
         }
     }
 
-    private func referenceLine() -> String {
-        "Screen — \(pt(session.reference.width))×\(pt(session.reference.height))"
+    private func referenceLine() -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: modeSymbol(session.resolved.mode))
+                .font(.system(size: 10, weight: .medium))
+            Text(session.resolved.descriptor)
+        }
+    }
+
+    private func modeSymbol(_ mode: ReferenceMode) -> String {
+        switch mode {
+        case .windowUnderCursor: return "macwindow"
+        case .screen: return "display"
+        case .custom: return "rectangle.dashed"
+        }
     }
 
     private func pt(_ value: CGFloat) -> Int {
