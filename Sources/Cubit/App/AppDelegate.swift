@@ -4,14 +4,16 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let settings = SettingsStore()
     let overlayController: OverlayController
-    private(set) var hotkeyManager: HotkeyManager?
+    /// Registering the Carbon hotkey doesn't depend on app-launch completion, so this is
+    /// built eagerly alongside `overlayController` rather than deferred to
+    /// `applicationDidFinishLaunching`. Non-optional means the Settings scene (which reads
+    /// this to build its Shortcuts tab) can never observe a not-yet-initialized state.
+    let hotkeyManager: HotkeyManager
 
     override init() {
-        overlayController = OverlayController(settings: settings)
+        let overlayController = OverlayController(settings: settings)
+        self.overlayController = overlayController
+        self.hotkeyManager = HotkeyManager(controller: overlayController)
         super.init()
-    }
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        hotkeyManager = HotkeyManager(controller: overlayController)
     }
 }
