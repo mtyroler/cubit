@@ -148,6 +148,10 @@ final class OverlayController {
             // Top inset = this screen's menu-bar height; excluded from the frozen draw so the
             // live menu bar (rendered above the overlay) isn't ghosted by a frozen copy.
             canvas.topInset = max(0, screen.frame.maxY - screen.visibleFrame.maxY)
+            // Bottom inset = this screen's Dock height when docked at the bottom (0 if hidden
+            // or docked to a side) — macOS renders the Dock above our maximum-level overlay,
+            // so bottom-anchored UI (the tool pill) needs to sit above it, not behind it.
+            canvas.bottomInset = max(0, screen.visibleFrame.minY - screen.frame.minY)
             canvas.appState = appState
             canvas.onDismiss = { [weak self] in self?.dismiss() }
             canvas.onDraftChanged = { [weak self] in self?.updateAppState() }

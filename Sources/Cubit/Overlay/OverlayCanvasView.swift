@@ -10,6 +10,12 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var frozenImage: CGImage? { didSet { needsDisplay = true } }
     /// Height of the menu-bar strip (points) to leave unfrozen at the top of this display.
     var topInset: CGFloat = 0
+    /// Height of the Dock strip (points), when docked at the bottom of this display — 0 if
+    /// the Dock is hidden or docked to a side. macOS renders the Dock above our maximum-level
+    /// overlay, so bottom-anchored UI (the tool pill) needs to sit above it, not behind it.
+    var bottomInset: CGFloat = 0 {
+        didSet { layoutToolPill() }
+    }
     var provider: WindowInfoProviding?
     var screenRects: [CanonicalRect] = []
     var excludedPID: pid_t = 0
@@ -425,7 +431,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         if bounds.width - cursor.x < 80 { x = cursor.x - 16 - size.width }
         if bounds.height - cursor.y < 80 { y = cursor.y - 16 - size.height }
         x = max(8, min(x, bounds.width - size.width - 8))
-        y = max(8, min(y, bounds.height - size.height - 8))
+        y = max(8, min(y, bounds.height - bottomInset - size.height - 8))
         hudHost.setFrameOrigin(CGPoint(x: x, y: y))
     }
 
@@ -435,7 +441,11 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         let size = toolPillHost.fittingSize
         toolPillHost.setFrameSize(size)
         let x = (bounds.width - size.width) / 2
-        let y = bounds.height - size.height - 24
+        // Same 24pt margin as always, measured from the visible (Dock-excluded) bottom edge
+        // rather than the raw canvas bottom, so the pill sits above the Dock instead of behind
+        // it. bottomInset is 0 when the Dock is hidden or docked to a side, preserving today's
+        // placement exactly.
+        let y = bounds.height - bottomInset - size.height - 24
         toolPillHost.setFrameOrigin(CGPoint(x: x, y: y))
     }
 
@@ -543,7 +553,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         }
 
         let x = max(8, min(anchor.x + 20, bounds.width - size.width - 8))
-        let y = max(8, min(anchor.y + 20, bounds.height - size.height - 8))
+        let y = max(8, min(anchor.y + 20, bounds.height - bottomInset - size.height - 8))
         return CGPoint(x: x, y: y)
     }
 
