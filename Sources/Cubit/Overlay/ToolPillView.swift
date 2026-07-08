@@ -6,6 +6,7 @@ struct ToolPillView: View {
     var onSelectTool: (MeasurementKind) -> Void
     var onCycleMode: () -> Void
     var onBeginCustomFrame: () -> Void
+    var onCycleColor: () -> Void
     var onExport: () -> Void
     var onDismiss: () -> Void
 
@@ -14,6 +15,7 @@ struct ToolPillView: View {
             toolButton("rectangle.dashed", hint: "R", kind: .rectangle)
             toolButton("arrow.left.and.right", hint: "H", kind: .horizontal)
             toolButton("arrow.up.and.down", hint: "V", kind: .vertical)
+            colorSwatchButton
 
             divider
 
@@ -81,6 +83,26 @@ struct ToolPillView: View {
         }
         .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary))
         .background(active ? AnyShapeStyle(Color.accentColor.opacity(0.15)) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    /// Shows the color of the active draft/selection; empty (disabled) when there's no
+    /// target, matching the export button's disabled treatment. Click cycles forward, same
+    /// as X — the only visible affordance for an otherwise keyboard-only feature.
+    private var colorSwatchButton: some View {
+        let colorIndex = session.currentColorIndex
+        let swatchColor = colorIndex.map { Palette.color(forIndex: $0).color }
+        return pillButton(action: onCycleColor) {
+            VStack(spacing: 2) {
+                Circle()
+                    .fill(swatchColor ?? Color.clear)
+                    .overlay(Circle().strokeBorder(.white.opacity(swatchColor == nil ? 0.15 : 0.6), lineWidth: 1))
+                    .frame(width: 14, height: 14)
+                hintTag("X")
+            }
+        }
+        .disabled(colorIndex == nil)
+        .opacity(colorIndex == nil ? 0.35 : 1)
+        .help("Color — X / 1–8")
     }
 
     private func pillButton<Content: View>(action: @escaping () -> Void, @ViewBuilder content: () -> Content) -> some View {

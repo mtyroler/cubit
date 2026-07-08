@@ -85,6 +85,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             onSelectTool: { [weak self] kind in self?.selectTool(kind) },
             onCycleMode: { [weak self] in self?.cycleReferenceMode() },
             onBeginCustomFrame: { [weak self] in self?.beginCustomFrame() },
+            onCycleColor: { [weak self] in self?.cycleColor() },
             onExport: { [weak self] in self?.toggleExportMenu() },
             onDismiss: { [weak self] in self?.onDismiss?() }
         )
@@ -137,7 +138,8 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             }
         }
         if let rect = session.draftRect, let draft = session.draft {
-            drawMeasurement(kind: draft.kind, rect: rect, converter: converter, display: display, color: .controlAccentColor)
+            let color = Palette.color(forIndex: draft.colorIndex).nsColor
+            drawMeasurement(kind: draft.kind, rect: rect, converter: converter, display: display, color: color)
         }
     }
 
@@ -584,6 +586,18 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         refresh()
     }
 
+    /// Cycles the color of the active draft, else the selected measurement — the shape
+    /// recolors live, which is its own feedback, so no flash here (unlike tool switches).
+    private func cycleColor(forward: Bool = true) {
+        session?.cycleColor(forward: forward)
+        refresh()
+    }
+
+    private func setColor(index: Int) {
+        session?.setColor(index: index)
+        refresh()
+    }
+
     // MARK: Reference resolution
 
     private func resolveReference(at cursor: CanonicalPoint?) {
@@ -695,6 +709,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         case "h": selectTool(.horizontal)
         case "v": selectTool(.vertical)
         case "c": beginCustomFrame()
+        case "x": cycleColor(forward: !modifiers.contains(.shift))
+        case "1", "2", "3", "4", "5", "6", "7", "8":
+            if let digit = characters.flatMap(Int.init) { setColor(index: digit - 1) }
         default: super.keyDown(with: event)
         }
     }

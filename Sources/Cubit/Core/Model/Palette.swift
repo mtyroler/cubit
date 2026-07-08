@@ -25,4 +25,12 @@ enum Palette {
     static func color(forIndex index: Int) -> PaletteColor {
         colors[index % colors.count]
     }
+
+    /// Wraps `index` one step forward or backward through the palette (index 0 follows the
+    /// last color going backward, and vice versa going forward).
+    static func cycledIndex(_ index: Int, forward: Bool) -> Int {
+        let count = colors.count
+        let normalized = ((index % count) + count) % count
+        return forward ? (normalized + 1) % count : (normalized - 1 + count) % count
+    }
 }

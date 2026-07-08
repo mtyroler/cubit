@@ -30,4 +30,24 @@ final class PaletteTests: XCTestCase {
             XCTAssertLessThanOrEqual(color.blue, 1)
         }
     }
+
+    // MARK: cycledIndex
+
+    func testCycledIndexForwardWrapsAtEight() {
+        XCTAssertEqual(Palette.cycledIndex(0, forward: true), 1)
+        XCTAssertEqual(Palette.cycledIndex(6, forward: true), 7)
+        XCTAssertEqual(Palette.cycledIndex(7, forward: true), 0)
+    }
+
+    func testCycledIndexBackwardWrapsAtZero() {
+        XCTAssertEqual(Palette.cycledIndex(7, forward: false), 6)
+        XCTAssertEqual(Palette.cycledIndex(1, forward: false), 0)
+        XCTAssertEqual(Palette.cycledIndex(0, forward: false), 7)
+    }
+
+    func testCycledIndexForwardThenBackwardReturnsToStart() {
+        for start in 0..<8 {
+            XCTAssertEqual(Palette.cycledIndex(Palette.cycledIndex(start, forward: true), forward: false), start)
+        }
+    }
 }

@@ -10,6 +10,7 @@ final class MeasurementSession {
         var current: CanonicalPoint
         var constrain: Bool
         var fromCenter: Bool
+        var colorIndex: Int
     }
 
     struct CustomDraft: Equatable {
@@ -106,7 +107,7 @@ final class MeasurementSession {
     }
 
     func beginDraft(at anchor: CanonicalPoint, constrain: Bool, fromCenter: Bool) {
-        draft = Draft(kind: tool, anchor: anchor, current: anchor, constrain: constrain, fromCenter: fromCenter)
+        draft = Draft(kind: tool, anchor: anchor, current: anchor, constrain: constrain, fromCenter: fromCenter, colorIndex: nextColorIndex())
     }
 
     func updateDraft(to current: CanonicalPoint, constrain: Bool, fromCenter: Bool) {
@@ -129,7 +130,7 @@ final class MeasurementSession {
         let (kind, finalRect) = MeasurementEngine.classifyForCommit(kind: draft.kind, rect: rect)
 
         pushUndo()
-        let measurement = Measurement(kind: kind, rect: finalRect, colorIndex: nextColorIndex())
+        let measurement = Measurement(kind: kind, rect: finalRect, colorIndex: draft.colorIndex)
         measurements.append(measurement)
         selectedID = measurement.id
         return measurement
@@ -180,6 +181,74 @@ final class MeasurementSession {
         var index = 0
         while used.contains(index) { index += 1 }
         return index
+    }
+
+    /// Color of the active draft while drafting/dragging, else the selected measurement's
+    /// color; nil when neither exists (nothing for X / 1–8 / the pill swatch to act on).
+    var currentColorIndex: Int? {
+        if let draft { return draft.colorIndex }
+        if let selectedMeasurement { return selectedMeasurement.colorIndex }
+        return nil
+    }
+
+    /// Cycles the color of the active draft, else the selected measurement. X / Shift+X.
+    func cycleColor(forward: Bool) {
+        if draft != nil {
+            cycleDraftColor(forward: forward)
+        } else {
+            cycleSelectedColor(forward: forward)
+        }
+    }
+
+    /// Jumps the color of the active draft, else the selected measurement, to a specific
+    /// palette index. Digit keys 1–8 (mapped to index 0–7 by the caller).
+    func setColor(index: Int) {
+        guard Palette.colors.indices.contains(index) else { return }
+        if draft != nil {
+            setDraftColor(index: index)
+        } else {
+            setSelectedColor(index: index)
+        }
+    }
+
+    private func cycleDraftColor(forward: Bool) {
+        guard var draft else { return }
+        draft.colorIndex = Palette.cycledIndex(draft.colorIndex, forward: forward)
+        self.draft = draft
+    }
+
+    private func setDraftColor(index: Int) {
+        guard var draft else { return }
+        draft.colorIndex = index
+        self.draft = draft
+    }
+
+    private func cycleSelectedColor(forward: Bool) {
+        guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
+        beginColorEdit(for: selectedID)
+        measurements[index].colorIndex = Palette.cycledIndex(measurements[index].colorIndex, forward: forward)
+    }
+
+    private func setSelectedColor(index newIndex: Int) {
+        guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
+        beginColorEdit(for: selectedID)
+        measurements[index].colorIndex = newIndex
+    }
+
+    /// Committed color edits participate in undo, but rapid cycling (holding X, or tapping
+    /// through several digits) on the *same* measurement within this window collapses into
+    /// the one undo step that preceded the streak, rather than one step per keystroke.
+    private static let colorEditCoalesceWindow: TimeInterval = 1.0
+    private var lastColorEditID: UUID?
+    private var lastColorEditAt: Date?
+
+    private func beginColorEdit(for id: UUID) {
+        let now = Date()
+        let coalescing = lastColorEditID == id
+            && lastColorEditAt.map { now.timeIntervalSince($0) < Self.colorEditCoalesceWindow } == true
+        if !coalescing { pushUndo() }
+        lastColorEditID = id
+        lastColorEditAt = now
     }
 
     // MARK: Selection & editing
