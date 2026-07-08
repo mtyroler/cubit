@@ -196,6 +196,14 @@ private struct LegendCard: View {
                 }
             }
 
+            ForEach(Array(legend.totals.enumerated()), id: \.offset) { _, total in
+                Text(total)
+                    .font(ExportFontRole.legendValue.font)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+
             if !legend.wordmark.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: "cube")

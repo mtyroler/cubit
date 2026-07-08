@@ -22,7 +22,8 @@ enum ExportRenderer {
         windowShadow: Bool = true,
         metadata: ExportMetadata = ExportMetadata(),
         markup: MarkupStyle = .default,
-        windowImage: CGImage? = nil
+        windowImage: CGImage? = nil,
+        showTotals: Bool = false
     ) -> CGImage? {
         let scale = captured.scale
         let displayFrame = captured.canonicalFrame
@@ -39,7 +40,8 @@ enum ExportRenderer {
                 scale: scale,
                 windowShadow: windowShadow,
                 metadata: metadata,
-                markup: markup
+                markup: markup,
+                showTotals: showTotals
             )
         }
 
@@ -75,7 +77,8 @@ enum ExportRenderer {
             cropRect: cropForEngine,
             imageSize: pointSize,
             metadata: metadata,
-            markup: markup
+            markup: markup,
+            showTotals: showTotals
         )
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
@@ -104,7 +107,8 @@ enum ExportRenderer {
         scale: CGFloat,
         windowShadow: Bool,
         metadata: ExportMetadata,
-        markup: MarkupStyle
+        markup: MarkupStyle,
+        showTotals: Bool
     ) -> CGImage? {
         let pointSize = CGSize(width: CGFloat(image.width) / scale, height: CGFloat(image.height) / scale)
         let cropRect = CanonicalRect(origin: reference.rect.origin, width: pointSize.width, height: pointSize.height)
@@ -116,7 +120,8 @@ enum ExportRenderer {
             cropRect: cropRect,
             imageSize: pointSize,
             metadata: metadata,
-            markup: markup
+            markup: markup,
+            showTotals: showTotals
         )
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
@@ -150,7 +155,8 @@ enum ExportRenderer {
         windowShadow: Bool = true,
         metadata: ExportMetadata = ExportMetadata(),
         markup: MarkupStyle = .default,
-        windowImage: CGImage? = nil
+        windowImage: CGImage? = nil,
+        showTotals: Bool = false
     ) -> Data? {
         guard let image = renderCGImage(
             measurements: measurements,
@@ -160,7 +166,8 @@ enum ExportRenderer {
             windowShadow: windowShadow,
             metadata: metadata,
             markup: markup,
-            windowImage: windowImage
+            windowImage: windowImage,
+            showTotals: showTotals
         ) else {
             return nil
         }
@@ -206,7 +213,8 @@ enum ExportRenderer {
         cropRect: CanonicalRect,
         imageSize: CGSize,
         metadata: ExportMetadata,
-        markup: MarkupStyle
+        markup: MarkupStyle,
+        showTotals: Bool
     ) -> LayoutRequest {
         var callouts: [CalloutInput] = []
         var rows: [LegendRowInput] = []
@@ -239,6 +247,7 @@ enum ExportRenderer {
         let legend = LegendInput(
             headerText: reference.descriptor,
             rows: rows,
+            totals: showTotals ? measurementTotals(measurements, reference: reference.rect, scale: scale) : [],
             wordmark: hasFooter ? "" : "Cubit",
             metadataHeight: 0
         )
@@ -266,6 +275,46 @@ enum ExportRenderer {
             columns.append(MetadataFooterColumnInput(caption: "App", lines: app.lines))
         }
         return MetadataFooterInput(columns: columns, wordmark: "Cubit")
+    }
+
+    /// Summed totals per measurement kind, one legend line each, only for kinds with at least
+    /// two measurements (a single one already shows its own value in its row). Rectangles total
+    /// their area %, horizontal lines their combined width % and pixel length, vertical lines
+    /// their combined height % and pixel length. Sums are arithmetic — overlapping shapes are
+    /// counted more than once, matching "how much did I mark", not a de-duplicated union.
+    static func measurementTotals(_ measurements: [Measurement], reference: CanonicalRect, scale: CGFloat) -> [String] {
+        var rectPercent = 0.0, rectCount = 0
+        var hPercent = 0.0, hLength: CGFloat = 0, hCount = 0
+        var vPercent = 0.0, vLength: CGFloat = 0, vCount = 0
+
+        for measurement in measurements {
+            let metrics = MeasurementEngine.metrics(for: measurement, reference: reference, scale: scale)
+            switch measurement.kind {
+            case .rectangle:
+                rectPercent += metrics.areaPercent
+                rectCount += 1
+            case .horizontal:
+                hPercent += metrics.widthPercent
+                hLength += metrics.lengthPx
+                hCount += 1
+            case .vertical:
+                vPercent += metrics.heightPercent
+                vLength += metrics.lengthPx
+                vCount += 1
+            }
+        }
+
+        var lines: [String] = []
+        if rectCount >= 2 {
+            lines.append(String(format: "Total area  ·  %.1f%%", rectPercent))
+        }
+        if hCount >= 2 {
+            lines.append(String(format: "Total width  ·  %.1f%%  ·  %d px", hPercent, Int(hLength.rounded())))
+        }
+        if vCount >= 2 {
+            lines.append(String(format: "Total height  ·  %.1f%%  ·  %d px", vPercent, Int(vLength.rounded())))
+        }
+        return lines
     }
 
     static func primaryText(_ metrics: Metrics) -> String {
