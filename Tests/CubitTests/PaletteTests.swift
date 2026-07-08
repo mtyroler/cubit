@@ -31,6 +31,18 @@ final class PaletteTests: XCTestCase {
         }
     }
 
+    // MARK: names
+
+    func testColorNamesParallelColorsAndCycle() {
+        XCTAssertEqual(Palette.colorNames.count, Palette.colors.count)
+        XCTAssertEqual(Palette.name(forIndex: 0), "orange")
+        XCTAssertEqual(Palette.name(forIndex: 1), "sky blue")
+        XCTAssertEqual(Palette.name(forIndex: 7), "gray")
+        // Wraps like the color lookup, including negatives.
+        XCTAssertEqual(Palette.name(forIndex: 8), "orange")
+        XCTAssertEqual(Palette.name(forIndex: -1), "gray")
+    }
+
     // MARK: cycledIndex
 
     func testCycledIndexForwardWrapsAtEight() {
