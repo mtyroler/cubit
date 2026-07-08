@@ -5,8 +5,12 @@ import XCTest
 private struct FakeMeasurer: TextMeasuring {
     var charWidth: CGFloat = 7
     var lineHeight: CGFloat = 14
-    func size(of string: String, role: ExportFontRole) -> CGSize {
-        CGSize(width: CGFloat(string.count) * charWidth, height: lineHeight)
+    /// Scales the fixed per-character metrics by how far `pointSize` sits from the role's
+    /// own baseline, so tests that vary point size (markup threading) see a real size delta
+    /// while tests using the default `size(of:role:)` convenience stay exactly as before.
+    func size(of string: String, role: ExportFontRole, pointSize: CGFloat) -> CGSize {
+        let scale = pointSize / role.pointSize
+        return CGSize(width: CGFloat(string.count) * charWidth * scale, height: lineHeight * scale)
     }
 }
 
@@ -31,7 +35,8 @@ final class AnnotationLayoutEngineTests: XCTestCase {
         reference: CanonicalRect = CanonicalRect(x: 0, y: 0, width: 1000, height: 800),
         mode: ReferenceMode = .windowUnderCursor,
         callouts: [CalloutInput],
-        legend: LegendInput? = nil
+        legend: LegendInput? = nil,
+        markup: MarkupStyle = .default
     ) -> LayoutRequest {
         LayoutRequest(
             cropRect: crop ?? CanonicalRect(x: 0, y: 0, width: image.width, height: image.height),
@@ -39,7 +44,8 @@ final class AnnotationLayoutEngineTests: XCTestCase {
             referenceRect: reference,
             referenceMode: mode,
             callouts: callouts,
-            legend: legend ?? self.legend()
+            legend: legend ?? self.legend(),
+            markup: markup
         )
     }
 
@@ -381,5 +387,62 @@ final class AnnotationLayoutEngineTests: XCTestCase {
         let sizeWithout = AnnotationLayoutEngine.legendSize(withoutWordmark, measuring: measuring)
         // Dropping the footer row removes one row height (14) and one gap (8).
         XCTAssertEqual(sizeWith.height - sizeWithout.height, 22, accuracy: accuracy)
+    }
+
+    // MARK: - Markup threading (export parity with the overlay's border/fill/label settings)
+
+    func testDefaultMarkupMatchesLegacyHardcodedCalloutSizes() {
+        // At MarkupStyle.default, callout roles must resolve to exactly the sizes that were
+        // hardcoded before markup threading existed (10/13/10), so behavior is unchanged
+        // for every user who never touches the Appearance sliders.
+        XCTAssertEqual(MarkupStyle.default.calloutLabelPointSize, ExportFontRole.calloutLabel.pointSize)
+        XCTAssertEqual(MarkupStyle.default.calloutPrimaryPointSize, ExportFontRole.calloutPrimary.pointSize)
+        XCTAssertEqual(MarkupStyle.default.calloutDetailPointSize, ExportFontRole.calloutDetail.pointSize)
+    }
+
+    func testLargerLabelPointSizeGrowsCalloutPill() {
+        let rect = CanonicalRect(x: 400, y: 300, width: 200, height: 150)
+        let smallMarkup = MarkupStyle(borderWidth: 2, fillOpacity: 0.12, labelPointSize: 10)
+        let largeMarkup = MarkupStyle(borderWidth: 2, fillOpacity: 0.12, labelPointSize: 13)
+
+        let small = AnnotationLayoutEngine.layout(
+            request(image: CGSize(width: 1000, height: 800), callouts: [rectCallout(rect, label: "Width")], markup: smallMarkup),
+            measuring: measuring
+        )
+        let large = AnnotationLayoutEngine.layout(
+            request(image: CGSize(width: 1000, height: 800), callouts: [rectCallout(rect, label: "Width")], markup: largeMarkup),
+            measuring: measuring
+        )
+
+        XCTAssertGreaterThan(large.callouts[0].frame.width, small.callouts[0].frame.width)
+        XCTAssertGreaterThan(large.callouts[0].frame.height, small.callouts[0].frame.height)
+    }
+
+    func testLayoutCarriesMarkupThroughToOutput() {
+        let markup = MarkupStyle(borderWidth: 4, fillOpacity: 0.25, labelPointSize: 13)
+        let layout = AnnotationLayoutEngine.layout(
+            request(image: CGSize(width: 1000, height: 800), callouts: [rectCallout(CanonicalRect(x: 0, y: 0, width: 100, height: 100))], markup: markup),
+            measuring: measuring
+        )
+        XCTAssertEqual(layout.markup, markup, "renderer reads border/fill/label size off the layout, not a side channel")
+    }
+
+    func testLegendAndFooterRolesAreUnaffectedByLabelPointSize() {
+        // Only callout text (the export's label pills) scales with labelTextSize; legend,
+        // footer, and wordmark chrome are unrelated to measurement labels.
+        let rect = CanonicalRect(x: 400, y: 300, width: 200, height: 150)
+        let smallMarkup = MarkupStyle(borderWidth: 2, fillOpacity: 0.12, labelPointSize: 10)
+        let largeMarkup = MarkupStyle(borderWidth: 2, fillOpacity: 0.12, labelPointSize: 13)
+
+        let small = AnnotationLayoutEngine.layout(
+            request(image: CGSize(width: 1000, height: 800), callouts: [rectCallout(rect)], markup: smallMarkup),
+            measuring: measuring
+        )
+        let large = AnnotationLayoutEngine.layout(
+            request(image: CGSize(width: 1000, height: 800), callouts: [rectCallout(rect)], markup: largeMarkup),
+            measuring: measuring
+        )
+
+        XCTAssertEqual(small.legend.frame.size, large.legend.frame.size)
     }
 }

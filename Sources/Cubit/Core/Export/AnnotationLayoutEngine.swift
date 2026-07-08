@@ -51,6 +51,7 @@ enum AnnotationLayoutEngine {
             shapes: shapes,
             obstacles: obstacles,
             bounds: bounds,
+            markup: request.markup,
             measuring: measuring
         )
 
@@ -71,7 +72,8 @@ enum AnnotationLayoutEngine {
             callouts: callouts,
             legend: legend,
             referenceOutline: referenceOutline,
-            footer: footer
+            footer: footer,
+            markup: request.markup
         )
     }
 
@@ -88,24 +90,24 @@ enum AnnotationLayoutEngine {
 
     // MARK: - Callout pills
 
-    private static func pillSize(for input: CalloutInput, measuring: TextMeasuring) -> CGSize {
+    private static func pillSize(for input: CalloutInput, markup: MarkupStyle, measuring: TextMeasuring) -> CGSize {
         var lineWidths: [CGFloat] = []
         var height = pillPaddingV * 2
         var lineCount = 0
 
         if let label = input.labelText, !label.isEmpty {
-            let s = measuring.size(of: label, role: .calloutLabel)
+            let s = measuring.size(of: label, role: .calloutLabel, pointSize: markup.calloutLabelPointSize)
             lineWidths.append(s.width)
             height += s.height
             lineCount += 1
         }
-        let primary = measuring.size(of: input.primaryText, role: .calloutPrimary)
+        let primary = measuring.size(of: input.primaryText, role: .calloutPrimary, pointSize: markup.calloutPrimaryPointSize)
         lineWidths.append(primary.width)
         height += primary.height
         lineCount += 1
 
         if !input.detailText.isEmpty {
-            let detail = measuring.size(of: input.detailText, role: .calloutDetail)
+            let detail = measuring.size(of: input.detailText, role: .calloutDetail, pointSize: markup.calloutDetailPointSize)
             lineWidths.append(detail.width)
             height += detail.height
             lineCount += 1
@@ -121,13 +123,14 @@ enum AnnotationLayoutEngine {
         shapes: [ShapeGeometry],
         obstacles: [CGRect],
         bounds: CGRect,
+        markup: MarkupStyle,
         measuring: TextMeasuring
     ) -> [PlacedCallout] {
         var placedFrames: [CGRect] = []
         var result: [PlacedCallout] = []
 
         for (input, shape) in zip(inputs, shapes) {
-            let size = pillSize(for: input, measuring: measuring)
+            let size = pillSize(for: input, markup: markup, measuring: measuring)
             let candidates = candidateOrigins(for: shape, pillSize: size)
 
             var chosen: CGRect?

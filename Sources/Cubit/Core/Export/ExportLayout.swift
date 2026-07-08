@@ -61,9 +61,38 @@ enum ExportFontRole: Sendable, CaseIterable {
 
 /// The one point where the pure layout engine reaches for text metrics. The real
 /// implementation lives at the AppKit edge (`NSAttributedString`); tests inject a
-/// deterministic estimator so legend/pill sizing is exact.
+/// deterministic estimator so legend/pill sizing is exact. `pointSize` is explicit (rather
+/// than always `role.pointSize`) so callout text can be measured at the user's configured
+/// label size — the same size the renderer then draws at, keeping pill geometry exact.
 protocol TextMeasuring: Sendable {
-    func size(of string: String, role: ExportFontRole) -> CGSize
+    func size(of string: String, role: ExportFontRole, pointSize: CGFloat) -> CGSize
+}
+
+extension TextMeasuring {
+    /// Convenience for roles that never scale with user settings (legend, footer, wordmark).
+    func size(of string: String, role: ExportFontRole) -> CGSize {
+        size(of: string, role: role, pointSize: role.pointSize)
+    }
+}
+
+/// Export markup styling sourced from `SettingsStore`, kept as plain values so Core stays
+/// framework-free. Mirrors the overlay's measurement border/fill/label-size settings so
+/// exports match what the user saw on screen. `showLabelPills` deliberately has no
+/// counterpart here — callouts are the export's label pills, always shown.
+struct MarkupStyle: Sendable, Equatable {
+    var borderWidth: CGFloat
+    var fillOpacity: CGFloat
+    /// Base label point size (10/11/13), mirroring `LabelTextSize.pointSize` on the overlay.
+    var labelPointSize: CGFloat
+
+    static let `default` = MarkupStyle(borderWidth: 2, fillOpacity: 0.12, labelPointSize: 11)
+
+    /// Callout text sizes derived from `labelPointSize`, preserving the pill's existing
+    /// label/primary/detail hierarchy. At the medium default (11) these resolve to the
+    /// original hardcoded 10/13/10, so behavior is unchanged unless the user moves the slider.
+    var calloutLabelPointSize: CGFloat { labelPointSize - 1 }
+    var calloutPrimaryPointSize: CGFloat { labelPointSize + 2 }
+    var calloutDetailPointSize: CGFloat { labelPointSize - 1 }
 }
 
 // MARK: - Engine input (all rects canonical; strings pre-composed by the renderer)
@@ -119,6 +148,7 @@ struct LayoutRequest: Sendable {
     var callouts: [CalloutInput]
     var legend: LegendInput
     var metadataFooter: MetadataFooterInput?
+    var markup: MarkupStyle
 
     init(
         cropRect: CanonicalRect,
@@ -127,7 +157,8 @@ struct LayoutRequest: Sendable {
         referenceMode: ReferenceMode,
         callouts: [CalloutInput],
         legend: LegendInput,
-        metadataFooter: MetadataFooterInput? = nil
+        metadataFooter: MetadataFooterInput? = nil,
+        markup: MarkupStyle = .default
     ) {
         self.cropRect = cropRect
         self.imageSize = imageSize
@@ -136,6 +167,7 @@ struct LayoutRequest: Sendable {
         self.callouts = callouts
         self.legend = legend
         self.metadataFooter = metadataFooter
+        self.markup = markup
     }
 }
 
@@ -193,4 +225,5 @@ struct ExportLayout: Sendable {
     /// Outline the reference frame only when it isn't the whole screen.
     var referenceOutline: CGRect?
     var footer: FooterGeometry?
+    var markup: MarkupStyle
 }

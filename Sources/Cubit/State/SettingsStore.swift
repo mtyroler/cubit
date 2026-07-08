@@ -150,6 +150,20 @@ final class SettingsStore {
         set { defaults.set(newValue, forKey: Keys.metadataApp) }
     }
 
+    /// Export framing toggles, stored under keys owned by the export-layout feature
+    /// (`ExportLayoutPreferences`). This store only forwards raw reads/writes, same pattern
+    /// as the metadata imprints above.
+    var includeContext: Bool {
+        get { defaults.bool(forKey: ExportLayoutPreferences.includeContextKey) }
+        set { defaults.set(newValue, forKey: ExportLayoutPreferences.includeContextKey) }
+    }
+
+    /// Defaults to true when unset (a fresh install styles window exports).
+    var windowShadow: Bool {
+        get { defaults.object(forKey: ExportLayoutPreferences.windowShadowKey) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: ExportLayoutPreferences.windowShadowKey) }
+    }
+
     /// Reflects (and drives) the system login-item registration via SMAppService. A no-op
     /// under XCTest so tests never register/unregister a real login item.
     var launchAtLogin: Bool {

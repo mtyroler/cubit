@@ -20,7 +20,8 @@ enum ExportRenderer {
         captured: CapturedDisplay,
         includeContext: Bool = false,
         windowShadow: Bool = true,
-        metadata: ExportMetadata = ExportMetadata()
+        metadata: ExportMetadata = ExportMetadata(),
+        markup: MarkupStyle = .default
     ) -> CGImage? {
         let scale = captured.scale
         let displayFrame = captured.canonicalFrame
@@ -56,7 +57,8 @@ enum ExportRenderer {
             scale: scale,
             cropRect: cropForEngine,
             imageSize: pointSize,
-            metadata: metadata
+            metadata: metadata,
+            markup: markup
         )
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
@@ -89,7 +91,8 @@ enum ExportRenderer {
         captured: CapturedDisplay,
         includeContext: Bool = false,
         windowShadow: Bool = true,
-        metadata: ExportMetadata = ExportMetadata()
+        metadata: ExportMetadata = ExportMetadata(),
+        markup: MarkupStyle = .default
     ) -> Data? {
         guard let image = renderCGImage(
             measurements: measurements,
@@ -97,7 +100,8 @@ enum ExportRenderer {
             captured: captured,
             includeContext: includeContext,
             windowShadow: windowShadow,
-            metadata: metadata
+            metadata: metadata,
+            markup: markup
         ) else {
             return nil
         }
@@ -142,7 +146,8 @@ enum ExportRenderer {
         scale: CGFloat,
         cropRect: CanonicalRect,
         imageSize: CGSize,
-        metadata: ExportMetadata
+        metadata: ExportMetadata,
+        markup: MarkupStyle
     ) -> LayoutRequest {
         var callouts: [CalloutInput] = []
         var rows: [LegendRowInput] = []
@@ -185,7 +190,8 @@ enum ExportRenderer {
             referenceMode: reference.mode,
             callouts: callouts,
             legend: legend,
-            metadataFooter: hasFooter ? metadataFooter(from: metadata) : nil
+            metadataFooter: hasFooter ? metadataFooter(from: metadata) : nil,
+            markup: markup
         )
     }
 

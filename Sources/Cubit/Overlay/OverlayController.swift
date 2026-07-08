@@ -256,20 +256,27 @@ final class OverlayController {
         pendingMetadataToggles = nil
         pendingFraming = nil
         let metadata = MetadataCollector.collect(toggles: toggles, reference: session.resolved, captured: captured)
+        let markup = MarkupStyle(
+            borderWidth: CGFloat(settings.measurementBorderWidth),
+            fillOpacity: CGFloat(settings.measurementFillOpacity),
+            labelPointSize: CGFloat(settings.labelTextSize.pointSize)
+        )
         return ExportRenderer.renderPNG(
             measurements: session.measurements,
             reference: session.resolved,
             captured: captured,
             includeContext: framing.includeContext,
             windowShadow: framing.windowShadow,
-            metadata: metadata
+            metadata: metadata,
+            markup: markup
         )
     }
 
     func exportSave() {
         guard canExport else { showOnboarding(); return }
         guard let data = currentExportPNG() else { return }
-        if let url = Exporter.saveToFile(data, above: windows as [NSWindow]) {
+        let directoryURL = Exporter.resolvedSaveDirectory(forPath: settings.defaultExportFolderPath)
+        if let url = Exporter.saveToFile(data, above: windows as [NSWindow], directoryURL: directoryURL) {
             frontCanvas?.showToast("Saved to \(Exporter.abbreviatedPath(url))")
         }
     }
