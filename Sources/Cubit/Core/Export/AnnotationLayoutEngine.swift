@@ -299,6 +299,7 @@ enum AnnotationLayoutEngine {
             frame: frame,
             headerText: input.headerText,
             rows: input.rows,
+            totals: input.totals,
             wordmark: input.wordmark,
             metadataHeight: input.metadataHeight
         )
@@ -320,6 +321,14 @@ enum AnnotationLayoutEngine {
             let rowWidth = legendSwatch + legendSwatchGap + label.width + legendLabelValueGap + value.width
             maxContentWidth = max(maxContentWidth, rowWidth)
             elementHeights.append(rowHeight)
+        }
+
+        // Total lines are swatch-less single lines below the rows, measured at the value role
+        // (the same font the card renders them with) so the card sizes exactly.
+        for total in input.totals {
+            let line = measuring.size(of: total, role: .legendValue)
+            maxContentWidth = max(maxContentWidth, line.width)
+            elementHeights.append(line.height)
         }
 
         let hasWordmark = !input.wordmark.isEmpty

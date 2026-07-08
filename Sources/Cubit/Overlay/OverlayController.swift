@@ -281,7 +281,8 @@ final class OverlayController {
             windowShadow: framing.windowShadow,
             metadata: metadata,
             markup: markup,
-            windowImage: windowImage
+            windowImage: windowImage,
+            showTotals: framing.showTotals
         )
     }
 

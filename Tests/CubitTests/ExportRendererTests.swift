@@ -115,10 +115,58 @@ final class ExportRendererTests: XCTestCase {
     func testFramingPreferenceRoundTrips() {
         let suite = UserDefaults(suiteName: "cubit.test.\(UUID().uuidString)")!
         let prefs = ExportLayoutPreferences(defaults: suite)
-        prefs.save(ExportFraming(includeContext: true, windowShadow: false))
+        let saved = ExportFraming(includeContext: true, windowShadow: false, showTotals: true)
+        prefs.save(saved)
         XCTAssertTrue(prefs.includeContext)
         XCTAssertFalse(prefs.windowShadow)
-        XCTAssertEqual(ExportLayoutPreferences(defaults: suite).framing, ExportFraming(includeContext: true, windowShadow: false))
+        XCTAssertTrue(prefs.showTotals)
+        XCTAssertEqual(ExportLayoutPreferences(defaults: suite).framing, saved)
+    }
+
+    func testShowTotalsDefaultsOff() {
+        let suite = UserDefaults(suiteName: "cubit.test.\(UUID().uuidString)")!
+        XCTAssertFalse(ExportLayoutPreferences(defaults: suite).showTotals)
+        XCTAssertFalse(ExportFraming.default.showTotals)
+    }
+
+    // MARK: - Measurement totals (issue #2)
+
+    private func rect(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> Cubit.Measurement {
+        Cubit.Measurement(kind: .rectangle, rect: CanonicalRect(x: x, y: y, width: w, height: h))
+    }
+
+    func testTotalsSumRectangleAreaPercent() {
+        let reference = CanonicalRect(x: 0, y: 0, width: 1000, height: 500) // area 500,000
+        let measurements = [rect(0, 0, 100, 50), rect(0, 0, 200, 50)] // 5,000 + 10,000 = 15,000 → 3.0%
+        let totals = ExportRenderer.measurementTotals(measurements, reference: reference, scale: 2)
+        XCTAssertEqual(totals, ["Total area  ·  3.0%"])
+    }
+
+    func testTotalsSumHorizontalAndVerticalLengths() {
+        let reference = CanonicalRect(x: 0, y: 0, width: 1000, height: 500)
+        let measurements = [
+            Measurement(kind: .horizontal, rect: CanonicalRect(x: 0, y: 10, width: 400, height: 0)),
+            Measurement(kind: .horizontal, rect: CanonicalRect(x: 0, y: 20, width: 100, height: 0)),
+            Measurement(kind: .vertical, rect: CanonicalRect(x: 5, y: 0, width: 0, height: 250)),
+            Measurement(kind: .vertical, rect: CanonicalRect(x: 6, y: 0, width: 0, height: 100))
+        ]
+        // H: (400+100)/1000 = 50%, px = (400+100)*2 = 1000
+        // V: (250+100)/500 = 70%, px = (250+100)*2 = 700
+        let totals = ExportRenderer.measurementTotals(measurements, reference: reference, scale: 2)
+        XCTAssertEqual(totals, [
+            "Total width  ·  50.0%  ·  1000 px",
+            "Total height  ·  70.0%  ·  700 px"
+        ])
+    }
+
+    func testTotalsOmitKindsWithFewerThanTwo() {
+        let reference = CanonicalRect(x: 0, y: 0, width: 1000, height: 500)
+        // One rect, one horizontal — neither kind reaches the ≥2 threshold.
+        let measurements = [
+            rect(0, 0, 100, 50),
+            Measurement(kind: .horizontal, rect: CanonicalRect(x: 0, y: 10, width: 400, height: 0))
+        ]
+        XCTAssertEqual(ExportRenderer.measurementTotals(measurements, reference: reference, scale: 2), [])
     }
 
     // MARK: - Clean-window substitution (occlusion fix)

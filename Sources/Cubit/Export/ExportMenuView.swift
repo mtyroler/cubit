@@ -20,6 +20,7 @@ struct ExportMenuView: View {
     @State private var app: Bool
     @State private var includeContext: Bool
     @State private var windowShadow: Bool
+    @State private var showTotals: Bool
     @State private var remember = false
 
     init(
@@ -41,6 +42,7 @@ struct ExportMenuView: View {
         _app = State(initialValue: initialToggles.app)
         _includeContext = State(initialValue: initialFraming.includeContext)
         _windowShadow = State(initialValue: initialFraming.windowShadow)
+        _showTotals = State(initialValue: initialFraming.showTotals)
     }
 
     private var currentToggles: MetadataToggles {
@@ -48,7 +50,7 @@ struct ExportMenuView: View {
     }
 
     private var currentFraming: ExportFraming {
-        ExportFraming(includeContext: includeContext, windowShadow: windowShadow)
+        ExportFraming(includeContext: includeContext, windowShadow: windowShadow, showTotals: showTotals)
     }
 
     private func notifyChange() {
@@ -103,6 +105,13 @@ struct ExportMenuView: View {
             .toggleStyle(.checkbox)
             .help("Export the area around the window instead of the window alone")
 
+            Toggle(isOn: $showTotals) {
+                Text("Sum measurement totals")
+                    .font(.system(size: 11))
+            }
+            .toggleStyle(.checkbox)
+            .help("Add a summed total per kind to the legend: rectangle area, horizontal width, vertical height")
+
             Divider().padding(.vertical, 2)
 
             Text("METADATA")
@@ -129,6 +138,7 @@ struct ExportMenuView: View {
         .onChange(of: app) { _, _ in notifyChange() }
         .onChange(of: includeContext) { _, _ in notifyChange() }
         .onChange(of: windowShadow) { _, _ in notifyChange() }
+        .onChange(of: showTotals) { _, _ in notifyChange() }
         .padding(10)
         .frame(width: 208)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

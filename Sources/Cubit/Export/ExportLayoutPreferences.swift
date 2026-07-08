@@ -7,6 +7,15 @@ import Foundation
 struct ExportFraming: Sendable, Equatable {
     var includeContext: Bool
     var windowShadow: Bool
+    /// Add a summed total per measurement kind to the legend (rectangle area, horizontal
+    /// width, vertical height). Off by default.
+    var showTotals: Bool
+
+    init(includeContext: Bool, windowShadow: Bool, showTotals: Bool = false) {
+        self.includeContext = includeContext
+        self.windowShadow = windowShadow
+        self.showTotals = showTotals
+    }
 
     static let `default` = ExportFraming(includeContext: false, windowShadow: true)
 }
@@ -16,6 +25,7 @@ struct ExportFraming: Sendable, Equatable {
 struct ExportLayoutPreferences: @unchecked Sendable {
     static let includeContextKey = "export.includeContext"
     static let windowShadowKey = "export.windowShadow"
+    static let showTotalsKey = "export.showTotals"
 
     private let defaults: UserDefaults
 
@@ -34,12 +44,19 @@ struct ExportLayoutPreferences: @unchecked Sendable {
         nonmutating set { defaults.set(newValue, forKey: Self.windowShadowKey) }
     }
 
+    /// Defaults to false when unset.
+    var showTotals: Bool {
+        get { defaults.bool(forKey: Self.showTotalsKey) }
+        nonmutating set { defaults.set(newValue, forKey: Self.showTotalsKey) }
+    }
+
     var framing: ExportFraming {
-        ExportFraming(includeContext: includeContext, windowShadow: windowShadow)
+        ExportFraming(includeContext: includeContext, windowShadow: windowShadow, showTotals: showTotals)
     }
 
     func save(_ framing: ExportFraming) {
         includeContext = framing.includeContext
         windowShadow = framing.windowShadow
+        showTotals = framing.showTotals
     }
 }

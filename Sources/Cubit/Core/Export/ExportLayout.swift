@@ -118,9 +118,20 @@ struct LegendRowInput: Sendable {
 struct LegendInput: Sendable {
     var headerText: String
     var rows: [LegendRowInput]
+    /// Summed-total lines (e.g. "Total area · 42.3%"), shown below the rows. Empty unless the
+    /// user opted into totals for this export.
+    var totals: [String]
     var wordmark: String
     /// Reserved vertical space in the footer for M6b metadata imprints. Zero for now.
     var metadataHeight: CGFloat
+
+    init(headerText: String, rows: [LegendRowInput], totals: [String] = [], wordmark: String, metadataHeight: CGFloat) {
+        self.headerText = headerText
+        self.rows = rows
+        self.totals = totals
+        self.wordmark = wordmark
+        self.metadataHeight = metadataHeight
+    }
 }
 
 /// One left-to-right column in the M6b metadata footer (MACHINE / WINDOW / APP). Strings
@@ -202,6 +213,7 @@ struct LegendGeometry: Sendable {
     var frame: CGRect
     var headerText: String
     var rows: [LegendRowInput]
+    var totals: [String]
     var wordmark: String
     var metadataHeight: CGFloat
 }
