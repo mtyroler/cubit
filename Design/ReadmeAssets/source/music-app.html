@@ -13,28 +13,7 @@
     background: #15151A;
     color: #F1EFEA;
   }
-  .titlebar {
-    height: 44px;
-    display: flex;
-    align-items: center;
-    padding: 0 18px;
-    background: #1C1C22;
-    border-bottom: 1px solid #2A2A32;
-  }
-  .dots { display: flex; gap: 8px; }
-  .dot { width: 12px; height: 12px; border-radius: 50%; }
-  .dot.red { background: #FF5F57; }
-  .dot.yellow { background: #FEBC2E; }
-  .dot.green { background: #28C840; }
-  .titlebar .name {
-    flex: 1;
-    text-align: center;
-    font-size: 13px;
-    font-weight: 600;
-    color: #8B8A93;
-    margin-right: 54px;
-  }
-  .layout { display: flex; height: calc(700px - 44px); }
+  .layout { display: flex; height: 700px; }
   .sidebar {
     width: 200px;
     padding: 28px 18px;
@@ -76,10 +55,6 @@
 </style>
 </head>
 <body>
-  <div class="titlebar">
-    <div class="dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
-    <div class="name">Nightjar</div>
-  </div>
   <div class="layout">
     <div class="sidebar">
       <div class="brand">night<span>jar</span></div>

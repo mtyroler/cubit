@@ -13,28 +13,7 @@
     background: #FBF6EE;
     color: #2E2A24;
   }
-  .titlebar {
-    height: 44px;
-    display: flex;
-    align-items: center;
-    padding: 0 18px;
-    background: #F3ECDD;
-    border-bottom: 1px solid #E3D9C2;
-  }
-  .dots { display: flex; gap: 8px; }
-  .dot { width: 12px; height: 12px; border-radius: 50%; }
-  .dot.red { background: #FF5F57; }
-  .dot.yellow { background: #FEBC2E; }
-  .dot.green { background: #28C840; }
-  .titlebar .name {
-    flex: 1;
-    text-align: center;
-    font-size: 13px;
-    font-weight: 600;
-    color: #6B6252;
-    margin-right: 54px;
-  }
-  .layout { display: flex; height: calc(700px - 44px); }
+  .layout { display: flex; height: 700px; }
   .sidebar {
     width: 220px;
     padding: 32px 20px;
@@ -108,10 +87,6 @@
 </style>
 </head>
 <body>
-  <div class="titlebar">
-    <div class="dots"><div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div></div>
-    <div class="name">Golden Hour</div>
-  </div>
   <div class="layout">
     <div class="sidebar">
       <div class="brand">golden<span>hour</span></div>
