@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="lg-case" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#52CFC6"/>
+      <stop offset="0.45" stop-color="#2FA8A0"/>
+      <stop offset="1" stop-color="#1C7E77"/>
+    </linearGradient>
+    <linearGradient id="lg-rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="0.35" stop-color="#FFFFFF" stop-opacity="0.15"/>
+      <stop offset="0.8" stop-color="#083A36" stop-opacity="0.0"/>
+      <stop offset="1" stop-color="#083A36" stop-opacity="0.45"/>
+    </linearGradient>
+    <radialGradient id="lg-bolt" cx="0.35" cy="0.3" r="1">
+      <stop offset="0" stop-color="#B9F2EE"/>
+      <stop offset="0.6" stop-color="#3FB5AD"/>
+      <stop offset="1" stop-color="#166660"/>
+    </radialGradient>
+    <filter id="lg-blur4" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4"/></filter>
+    <filter id="lg-blur8" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8"/></filter>
+  </defs>
+
+  <!-- case: glass stack -->
+  <rect x="132" y="96" width="248" height="240" rx="64" fill="url(#lg-case)"/>
+  <rect x="132" y="96" width="248" height="240" rx="64" fill="#FF8E5E" opacity="0.10"/>
+  <ellipse cx="256" cy="330" rx="112" ry="30" fill="#0A4B46" opacity="0.5" filter="url(#lg-blur8)"/>
+  <ellipse cx="252" cy="126" rx="112" ry="30" fill="#FFFFFF" opacity="0.65" filter="url(#lg-blur8)"/>
+  <circle cx="182" cy="136" r="20" fill="#FFFFFF" opacity="0.8" filter="url(#lg-blur8)"/>
+  <rect x="140" y="150" width="9" height="140" rx="4.5" fill="#FFFFFF" opacity="0.25" filter="url(#lg-blur4)"/>
+  <rect x="136" y="100" width="240" height="232" rx="60" fill="none" stroke="url(#lg-rim)" stroke-width="5"/>
+  <rect x="132" y="96" width="248" height="240" rx="64" fill="none" stroke="#0F5A55" stroke-width="3" opacity="0.55"/>
+
+  <!-- belt clip -->
+  <rect x="118" y="170" width="18" height="72" rx="9" fill="#14655F"/>
+  <rect x="121" y="174" width="6" height="30" rx="3" fill="#8FDDD8" opacity="0.7"/>
+
+  <!-- bolt (glass button) -->
+  <circle cx="356" cy="170" r="17" fill="url(#lg-bolt)"/>
+  <circle cx="350" cy="163" r="5" fill="#FFFFFF" opacity="0.9"/>
+</svg>

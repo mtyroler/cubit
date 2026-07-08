@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Cubit icon: Cheeky Tape, small-size variant">
+  <defs>
+    <linearGradient id="lg-bg-s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD6AE"/>
+      <stop offset="0.55" stop-color="#FF9A68"/>
+      <stop offset="1" stop-color="#F97243"/>
+    </linearGradient>
+    <linearGradient id="lg-case-s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#52CFC6"/>
+      <stop offset="0.45" stop-color="#2FA8A0"/>
+      <stop offset="1" stop-color="#1C7E77"/>
+    </linearGradient>
+    <linearGradient id="lg-tape-s" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFE08A"/>
+      <stop offset="0.5" stop-color="#F8CA55"/>
+      <stop offset="1" stop-color="#EAAE2E"/>
+    </linearGradient>
+    <linearGradient id="lg-metal-s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D9DEE6"/>
+      <stop offset="0.5" stop-color="#A9B1BD"/>
+      <stop offset="1" stop-color="#7E8794"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background: hard squircle, no glow -->
+  <rect width="512" height="512" rx="115" fill="url(#lg-bg-s)"/>
+
+  <!-- case: flat glass block, no clip/bolt/highlights -->
+  <rect x="132" y="96" width="248" height="240" rx="64" fill="url(#lg-case-s)"/>
+  <rect x="132" y="96" width="248" height="240" rx="64" fill="none" stroke="#0F5A55" stroke-width="4" opacity="0.6"/>
+
+  <!-- face: thickened eye strokes, no blush -->
+  <path d="M 200 194 Q 218 168 236 194" fill="none" stroke="#0C3835" stroke-width="14" stroke-linecap="round"/>
+  <path d="M 280 194 Q 298 168 316 194" fill="none" stroke="#0C3835" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- tape tongue: widened ~1.3x, only 2 ticks, no soft shading -->
+  <g transform="rotate(7 264 320)">
+    <rect x="219" y="302" width="94" height="150" rx="11" fill="url(#lg-tape-s)"/>
+    <g stroke="#A96F14" stroke-width="7" stroke-linecap="round">
+      <line x1="234" y1="352" x2="270" y2="352"/>
+      <line x1="234" y1="404" x2="270" y2="404"/>
+    </g>
+    <rect x="211" y="448" width="110" height="20" rx="8" fill="url(#lg-metal-s)"/>
+  </g>
+
+  <!-- mouth slot: widened to match tape -->
+  <rect x="205" y="286" width="118" height="30" rx="15" fill="#0A3532"/>
+</svg>

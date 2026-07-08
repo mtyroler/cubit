@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Cubit icon: Cheeky Tape in Liquid Glass style">
+  <defs>
+    <linearGradient id="lg-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD6AE"/>
+      <stop offset="0.55" stop-color="#FF9A68"/>
+      <stop offset="1" stop-color="#F97243"/>
+    </linearGradient>
+    <radialGradient id="lg-bgGlow" cx="0.3" cy="0.12" r="0.9">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.38"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="lg-case" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#52CFC6"/>
+      <stop offset="0.45" stop-color="#2FA8A0"/>
+      <stop offset="1" stop-color="#1C7E77"/>
+    </linearGradient>
+    <linearGradient id="lg-rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="0.35" stop-color="#FFFFFF" stop-opacity="0.15"/>
+      <stop offset="0.8" stop-color="#083A36" stop-opacity="0.0"/>
+      <stop offset="1" stop-color="#083A36" stop-opacity="0.45"/>
+    </linearGradient>
+    <linearGradient id="lg-tape" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFE08A"/>
+      <stop offset="0.5" stop-color="#F8CA55"/>
+      <stop offset="1" stop-color="#EAAE2E"/>
+    </linearGradient>
+    <linearGradient id="lg-metal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D9DEE6"/>
+      <stop offset="0.5" stop-color="#A9B1BD"/>
+      <stop offset="1" stop-color="#7E8794"/>
+    </linearGradient>
+    <radialGradient id="lg-bolt" cx="0.35" cy="0.3" r="1">
+      <stop offset="0" stop-color="#B9F2EE"/>
+      <stop offset="0.6" stop-color="#3FB5AD"/>
+      <stop offset="1" stop-color="#166660"/>
+    </radialGradient>
+    <filter id="lg-blur4" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4"/></filter>
+    <filter id="lg-blur8" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="lg-blur14" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+
+  <!-- background -->
+  <rect width="512" height="512" rx="115" fill="url(#lg-bg)"/>
+  <rect width="512" height="512" rx="115" fill="url(#lg-bgGlow)"/>
+
+  <!-- ground shadow -->
+  <ellipse cx="260" cy="466" rx="150" ry="18" fill="#7A2508" opacity="0.28" filter="url(#lg-blur14)"/>
+
+  <!-- case: glass stack -->
+  <rect x="132" y="96" width="248" height="240" rx="64" fill="url(#lg-case)"/>
+  <rect x="132" y="96" width="248" height="240" rx="64" fill="#FF8E5E" opacity="0.10"/>
+  <ellipse cx="256" cy="330" rx="112" ry="30" fill="#0A4B46" opacity="0.5" filter="url(#lg-blur8)"/>
+  <ellipse cx="252" cy="126" rx="112" ry="30" fill="#FFFFFF" opacity="0.65" filter="url(#lg-blur8)"/>
+  <circle cx="182" cy="136" r="20" fill="#FFFFFF" opacity="0.8" filter="url(#lg-blur8)"/>
+  <rect x="140" y="150" width="9" height="140" rx="4.5" fill="#FFFFFF" opacity="0.25" filter="url(#lg-blur4)"/>
+  <rect x="136" y="100" width="240" height="232" rx="60" fill="none" stroke="url(#lg-rim)" stroke-width="5"/>
+  <rect x="132" y="96" width="248" height="240" rx="64" fill="none" stroke="#0F5A55" stroke-width="3" opacity="0.55"/>
+
+  <!-- belt clip -->
+  <rect x="118" y="170" width="18" height="72" rx="9" fill="#14655F"/>
+  <rect x="121" y="174" width="6" height="30" rx="3" fill="#8FDDD8" opacity="0.7"/>
+
+  <!-- bolt (glass button) -->
+  <circle cx="356" cy="170" r="17" fill="url(#lg-bolt)"/>
+  <circle cx="350" cy="163" r="5" fill="#FFFFFF" opacity="0.9"/>
+
+  <!-- face -->
+  <path d="M 204 192 Q 218 173 232 192" fill="none" stroke="#0C3835" stroke-width="9.5" stroke-linecap="round"/>
+  <path d="M 284 192 Q 298 173 312 192" fill="none" stroke="#0C3835" stroke-width="9.5" stroke-linecap="round"/>
+  <circle cx="190" cy="224" r="12" fill="#FF8FAF" opacity="0.65" filter="url(#lg-blur4)"/>
+  <circle cx="324" cy="224" r="12" fill="#FF8FAF" opacity="0.65" filter="url(#lg-blur4)"/>
+
+  <!-- tape shadow cast on the chin -->
+  <ellipse cx="266" cy="336" rx="46" ry="10" fill="#062E2B" opacity="0.35" filter="url(#lg-blur8)"/>
+
+  <!-- tape tongue: emerges THROUGH the mouth slot, over the lower lip -->
+  <g transform="rotate(7 264 320)">
+    <rect x="228" y="302" width="72" height="150" rx="9" fill="url(#lg-tape)"/>
+    <rect x="234" y="306" width="10" height="142" rx="5" fill="#FFFFFF" opacity="0.45" filter="url(#lg-blur4)"/>
+    <g stroke="#A96F14" stroke-width="5" stroke-linecap="round">
+      <line x1="240" y1="344" x2="264" y2="344"/>
+      <line x1="240" y1="372" x2="254" y2="372"/>
+      <line x1="240" y1="400" x2="264" y2="400"/>
+      <line x1="240" y1="426" x2="254" y2="426"/>
+    </g>
+    <rect x="222" y="448" width="84" height="17" rx="7" fill="url(#lg-metal)"/>
+    <rect x="226" y="450" width="76" height="5" rx="2.5" fill="#FFFFFF" opacity="0.6"/>
+  </g>
+
+  <!-- mouth slot ON TOP of tape: the tape visibly exits its lower lip -->
+  <rect x="216" y="288" width="96" height="26" rx="13" fill="#0A3532"/>
+  <rect x="220" y="290" width="88" height="6" rx="3" fill="#000000" opacity="0.45"/>
+  <rect x="222" y="306" width="84" height="4" rx="2" fill="#5ECFC7" opacity="0.35"/>
+  <!-- soft shading where the tape bends over the lip -->
+  <rect x="232" y="312" width="66" height="8" fill="#7A5410" opacity="0.35" filter="url(#lg-blur4)"/>
+</svg>
