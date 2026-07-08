@@ -6,6 +6,28 @@ enum ExportFormat: String, CaseIterable, Sendable {
     case png
 }
 
+/// Overlay label-pill text size. Point sizes live here (not in the overlay) so Settings
+/// and the canvas agree on a single source of truth without either owning the other.
+enum LabelTextSize: String, CaseIterable, Sendable {
+    case small, medium, large
+
+    var pointSize: Double {
+        switch self {
+        case .small: return 10
+        case .medium: return 11
+        case .large: return 13
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .small: return "S"
+        case .medium: return "M"
+        case .large: return "L"
+        }
+    }
+}
+
 /// UserDefaults-backed app preferences. Injectable suite so tests never touch the real
 /// domain. Metadata-imprint toggles (`export.metadata.*`) are owned by the export/metadata
 /// feature — this store reads/writes those raw keys but does not define their semantics.
@@ -19,6 +41,11 @@ final class SettingsStore {
         static let showMenuBarPercent = "settings.showMenuBarPercent"
         static let exportFormat = "settings.exportFormat"
         static let copyAfterExport = "settings.copyAfterExport"
+        static let measurementBorderWidth = "settings.measurementBorderWidth"
+        static let measurementFillOpacity = "settings.measurementFillOpacity"
+        static let showLabelPills = "settings.showLabelPills"
+        static let labelTextSize = "settings.labelTextSize"
+        static let defaultExportFolderPath = "settings.defaultExportFolderPath"
 
         static let metadataMachine = "export.metadata.machine"
         static let metadataWindow = "export.metadata.window"
@@ -28,9 +55,17 @@ final class SettingsStore {
     static let dimOpacityRange: ClosedRange<Double> = 0.05...0.4
     static let defaultDimOpacity: Double = 0.15
 
+    static let measurementBorderWidthRange: ClosedRange<Double> = 1...4
+    static let defaultMeasurementBorderWidth: Double = 2
+
+    static let measurementFillOpacityRange: ClosedRange<Double> = 0.05...0.30
+    static let defaultMeasurementFillOpacity: Double = 0.12
+
     private let defaults: UserDefaults
 
     private var _dimOpacity: Double
+    private var _measurementBorderWidth: Double
+    private var _measurementFillOpacity: Double
 
     var defaultTool: MeasurementKind {
         didSet { defaults.set(defaultTool.rawValue, forKey: Keys.defaultTool) }
@@ -58,6 +93,44 @@ final class SettingsStore {
 
     var copyAfterExport: Bool {
         didSet { defaults.set(copyAfterExport, forKey: Keys.copyAfterExport) }
+    }
+
+    var measurementBorderWidth: Double {
+        get { _measurementBorderWidth }
+        set {
+            _measurementBorderWidth = newValue.clamped(to: Self.measurementBorderWidthRange)
+            defaults.set(_measurementBorderWidth, forKey: Keys.measurementBorderWidth)
+        }
+    }
+
+    var measurementFillOpacity: Double {
+        get { _measurementFillOpacity }
+        set {
+            _measurementFillOpacity = newValue.clamped(to: Self.measurementFillOpacityRange)
+            defaults.set(_measurementFillOpacity, forKey: Keys.measurementFillOpacity)
+        }
+    }
+
+    var showLabelPills: Bool {
+        didSet { defaults.set(showLabelPills, forKey: Keys.showLabelPills) }
+    }
+
+    var labelTextSize: LabelTextSize {
+        didSet { defaults.set(labelTextSize.rawValue, forKey: Keys.labelTextSize) }
+    }
+
+    /// Absolute path to the folder pre-selected in the export save panel, or nil to fall
+    /// back to the system default (last-used location). This is a runtime-only
+    /// preference picked live via a folder picker and persisted to UserDefaults — never a
+    /// path baked into source.
+    var defaultExportFolderPath: String? {
+        didSet { defaults.set(defaultExportFolderPath, forKey: Keys.defaultExportFolderPath) }
+    }
+
+    /// `defaultExportFolderPath` contracted to "~/…" for display, so the Settings UI never
+    /// shows a raw absolute path.
+    var defaultExportFolderDisplayPath: String? {
+        defaultExportFolderPath.map { ($0 as NSString).abbreviatingWithTildeInPath }
     }
 
     /// Metadata imprint toggles, stored under keys owned by the export/metadata feature.
@@ -120,6 +193,27 @@ final class SettingsStore {
 
         self.exportFormat = ExportFormat(rawValue: defaults.string(forKey: Keys.exportFormat) ?? "") ?? .png
         self.copyAfterExport = defaults.bool(forKey: Keys.copyAfterExport)
+
+        if let stored = defaults.object(forKey: Keys.measurementBorderWidth) as? Double {
+            self._measurementBorderWidth = stored.clamped(to: Self.measurementBorderWidthRange)
+        } else {
+            self._measurementBorderWidth = Self.defaultMeasurementBorderWidth
+        }
+
+        if let stored = defaults.object(forKey: Keys.measurementFillOpacity) as? Double {
+            self._measurementFillOpacity = stored.clamped(to: Self.measurementFillOpacityRange)
+        } else {
+            self._measurementFillOpacity = Self.defaultMeasurementFillOpacity
+        }
+
+        if defaults.object(forKey: Keys.showLabelPills) != nil {
+            self.showLabelPills = defaults.bool(forKey: Keys.showLabelPills)
+        } else {
+            self.showLabelPills = true
+        }
+
+        self.labelTextSize = LabelTextSize(rawValue: defaults.string(forKey: Keys.labelTextSize) ?? "") ?? .medium
+        self.defaultExportFolderPath = defaults.string(forKey: Keys.defaultExportFolderPath)
     }
 
     private static var isRunningTests: Bool {

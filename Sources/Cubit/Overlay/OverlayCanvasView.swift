@@ -21,6 +21,11 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var excludedPID: pid_t = 0
     /// Dim fill alpha outside measured/drafted rects — configurable in Settings, defaults to 15%.
     var dimOpacity: CGFloat = CGFloat(SettingsStore.defaultDimOpacity)
+    /// Measurement stroke width and rectangle fill alpha — configurable in Settings.
+    var measurementBorderWidth: CGFloat = CGFloat(SettingsStore.defaultMeasurementBorderWidth)
+    var measurementFillOpacity: CGFloat = CGFloat(SettingsStore.defaultMeasurementFillOpacity)
+    var showLabelPills = true
+    var labelTextSize: LabelTextSize = .medium
     var onDismiss: (() -> Void)?
     var onDraftChanged: (() -> Void)?
     var onExportSave: (() -> Void)?
@@ -132,7 +137,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         for measurement in session.measurements {
             let color = Palette.color(forIndex: measurement.colorIndex).nsColor
             drawMeasurement(kind: measurement.kind, rect: measurement.rect, converter: converter, display: display, color: color)
-            drawLabelPill(for: measurement, converter: converter, display: display, color: color)
+            if showLabelPills { drawLabelPill(for: measurement, converter: converter, display: display, color: color) }
             if measurement.id == session.selectedID {
                 drawHandles(for: measurement, converter: converter, display: display, color: color)
             }
@@ -219,11 +224,11 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
         switch kind {
         case .rectangle:
-            color.withAlphaComponent(0.12).setFill()
+            color.withAlphaComponent(measurementFillOpacity).setFill()
             NSBezierPath(rect: frame).fill()
             color.setStroke()
             let border = NSBezierPath(rect: frame)
-            border.lineWidth = 2
+            border.lineWidth = measurementBorderWidth
             border.stroke()
         case .horizontal:
             drawLine(from: CGPoint(x: frame.minX, y: frame.minY), to: CGPoint(x: frame.maxX, y: frame.minY), capAxisVertical: true, color: color)
@@ -235,7 +240,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     private func drawLine(from start: CGPoint, to end: CGPoint, capAxisVertical: Bool, color: NSColor) {
         color.setStroke()
         let line = NSBezierPath()
-        line.lineWidth = 2
+        line.lineWidth = measurementBorderWidth
         line.move(to: start)
         line.line(to: end)
         line.stroke()
@@ -243,7 +248,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         let half: CGFloat = 6
         for point in [start, end] {
             let cap = NSBezierPath()
-            cap.lineWidth = 2
+            cap.lineWidth = measurementBorderWidth
             if capAxisVertical {
                 cap.move(to: CGPoint(x: point.x, y: point.y - half))
                 cap.line(to: CGPoint(x: point.x, y: point.y + half))
@@ -299,7 +304,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         guard let session else { return NSAttributedString() }
         let text = MeasurementLabel.text(for: measurement, reference: session.reference, scale: session.referenceScale)
         return NSAttributedString(string: text, attributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
+            .font: NSFont.monospacedDigitSystemFont(ofSize: CGFloat(labelTextSize.pointSize), weight: .semibold),
             .foregroundColor: NSColor.white
         ])
     }
@@ -356,7 +361,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         }
 
         for measurement in session.measurements.reversed() {
-            if labelPillFrame(for: measurement, converter: converter, display: display).contains(localPoint) {
+            if showLabelPills, labelPillFrame(for: measurement, converter: converter, display: display).contains(localPoint) {
                 return .label(measurement.id)
             }
             let bodyFrame = localRect(measurement.rect, converter: converter, display: display).insetBy(dx: -5, dy: -5)

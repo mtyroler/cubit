@@ -147,6 +147,10 @@ final class OverlayController {
             canvas.screenRects = screenRects
             canvas.excludedPID = excludedPID
             canvas.dimOpacity = CGFloat(settings.dimOpacity)
+            canvas.measurementBorderWidth = CGFloat(settings.measurementBorderWidth)
+            canvas.measurementFillOpacity = CGFloat(settings.measurementFillOpacity)
+            canvas.showLabelPills = settings.showLabelPills
+            canvas.labelTextSize = settings.labelTextSize
             canvas.frozenImage = captured.first(where: { $0.displayID == descriptor.id })?.cgImage
             // Top inset = this screen's menu-bar height; excluded from the frozen draw so the
             // live menu bar (rendered above the overlay) isn't ghosted by a frozen copy.

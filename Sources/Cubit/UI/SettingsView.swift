@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The app's Settings window: General, Shortcuts, Appearance, Export. Standard macOS
 /// settings sizing — fixed width, height driven by content.
@@ -62,6 +63,8 @@ private struct GeneralSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        .padding(.bottom, 16)
+        .scrollDisabled(true)
     }
 }
 
@@ -94,6 +97,8 @@ private struct ShortcutsSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        .padding(.bottom, 16)
+        .scrollDisabled(true)
     }
 }
 
@@ -130,17 +135,72 @@ private struct AppearanceSettingsTab: View {
                     }
                 }
             }
+
+            Section("Markup") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Border width")
+                        Spacer()
+                        Text("\(Int(settings.measurementBorderWidth.rounded()))pt")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $settings.measurementBorderWidth, in: SettingsStore.measurementBorderWidthRange, step: 1)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Fill opacity")
+                        Spacer()
+                        Text("\(Int((settings.measurementFillOpacity * 100).rounded()))%")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $settings.measurementFillOpacity, in: SettingsStore.measurementFillOpacityRange)
+                }
+
+                Toggle("Show label pills", isOn: $settings.showLabelPills)
+
+                Picker("Label text size", selection: $settings.labelTextSize) {
+                    ForEach(LabelTextSize.allCases, id: \.self) { size in
+                        Text(size.displayName).tag(size)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
         }
         .formStyle(.grouped)
+        .padding(.bottom, 16)
+        .scrollDisabled(true)
     }
 }
 
 private struct ExportSettingsTab: View {
     @Bindable var settings: SettingsStore
+    @State private var isChoosingFolder = false
 
     var body: some View {
         Form {
             Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Default save location")
+                        Text(settings.defaultExportFolderDisplayPath ?? "System Default")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Choose…") { isChoosingFolder = true }
+                    if settings.defaultExportFolderPath != nil {
+                        Button("Reset") { settings.defaultExportFolderPath = nil }
+                    }
+                }
+                .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
+                    if case .success(let url) = result {
+                        settings.defaultExportFolderPath = url.path
+                    }
+                }
+
                 Toggle("Copy to clipboard after export", isOn: $settings.copyAfterExport)
             }
             Section {
@@ -156,5 +216,7 @@ private struct ExportSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        .padding(.bottom, 16)
+        .scrollDisabled(true)
     }
 }
