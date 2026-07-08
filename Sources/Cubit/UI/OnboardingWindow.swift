@@ -39,7 +39,11 @@ final class OnboardingWindow {
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.title = "Welcome to Cubit"
-        window.level = .floating
+        // Normal level (not .floating): the system Screen Recording permission dialog is
+        // presented above ordinary app windows but below floating ones, so a floating
+        // onboarding window would sit on top of — and hide — the very prompt it triggers.
+        // App activation below already brings this window forward on launch.
+        window.level = .normal
         window.setContentSize(NSSize(width: 420, height: 360))
         window.center()
         window.isReleasedWhenClosed = false
@@ -77,9 +81,15 @@ final class OnboardingModel {
         // disagree, or access still isn't live, surface the relaunch path.
         if requested && permissions.isGranted {
             onGranted?()
-        } else {
-            needsRelaunch = true
+            return
         }
+        // macOS only shows the capture prompt on the first-ever request per bundle id. Once
+        // any decision exists (including a prior denial, or an entry re-added as "off" after a
+        // reset), the request returns "not granted" with no dialog — so the button would appear
+        // to do nothing. Send the user straight to the Screen Recording list to flip the toggle,
+        // then relaunch to pick up the grant.
+        permissions.openSystemSettings()
+        needsRelaunch = true
     }
 
     func openSettings() {

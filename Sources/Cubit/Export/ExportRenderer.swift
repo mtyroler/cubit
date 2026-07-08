@@ -21,10 +21,27 @@ enum ExportRenderer {
         includeContext: Bool = false,
         windowShadow: Bool = true,
         metadata: ExportMetadata = ExportMetadata(),
-        markup: MarkupStyle = .default
+        markup: MarkupStyle = .default,
+        windowImage: CGImage? = nil
     ) -> CGImage? {
         let scale = captured.scale
         let displayFrame = captured.canonicalFrame
+
+        // Exact-window export with a clean window capture available: use the window's own
+        // pixels (occlusion-free) instead of cropping the composited display snapshot, which
+        // would bake in whatever window was stacked on top. Context/screen/custom exports keep
+        // the display-snapshot crop — their whole point is the surrounding desktop.
+        if let windowImage, reference.mode == .windowUnderCursor, !includeContext {
+            return renderWindowImage(
+                windowImage,
+                measurements: measurements,
+                reference: reference,
+                scale: scale,
+                windowShadow: windowShadow,
+                metadata: metadata,
+                markup: markup
+            )
+        }
 
         let cropCanonical = cropRect(reference: reference, displayFrame: displayFrame, includeContext: includeContext)
 
@@ -77,6 +94,46 @@ enum ExportRenderer {
         return renderer.cgImage
     }
 
+    /// Renders an annotated export from a clean, occlusion-free window capture. The image IS
+    /// the reference window at native resolution, so the crop rect is simply the window bounds
+    /// and annotations (in canonical space) map directly onto it — no display-snapshot crop.
+    private static func renderWindowImage(
+        _ image: CGImage,
+        measurements: [Measurement],
+        reference: ResolvedReference,
+        scale: CGFloat,
+        windowShadow: Bool,
+        metadata: ExportMetadata,
+        markup: MarkupStyle
+    ) -> CGImage? {
+        let pointSize = CGSize(width: CGFloat(image.width) / scale, height: CGFloat(image.height) / scale)
+        let cropRect = CanonicalRect(origin: reference.rect.origin, width: pointSize.width, height: pointSize.height)
+
+        let request = buildRequest(
+            measurements: measurements,
+            reference: reference,
+            scale: scale,
+            cropRect: cropRect,
+            imageSize: pointSize,
+            metadata: metadata,
+            markup: markup
+        )
+        let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
+
+        // A single-window capture carries transparent rounded corners, so the render is never
+        // opaque. The shadow toggle picks the native-window framing vs. a plain annotated crop.
+        if windowShadow {
+            let renderer = ImageRenderer(content: StyledWindowExportView(layout: layout, image: image))
+            renderer.scale = scale
+            renderer.isOpaque = false
+            return renderer.cgImage
+        }
+        let renderer = ImageRenderer(content: ScreenshotAnnotationView(layout: layout, image: image))
+        renderer.scale = scale
+        renderer.isOpaque = false
+        return renderer.cgImage
+    }
+
     /// Native-window styling is on only for an exact window crop with the shadow toggle on.
     static func windowStyled(mode: ReferenceMode, includeContext: Bool, windowShadow: Bool) -> Bool {
         mode == .windowUnderCursor && !includeContext && windowShadow
@@ -92,7 +149,8 @@ enum ExportRenderer {
         includeContext: Bool = false,
         windowShadow: Bool = true,
         metadata: ExportMetadata = ExportMetadata(),
-        markup: MarkupStyle = .default
+        markup: MarkupStyle = .default,
+        windowImage: CGImage? = nil
     ) -> Data? {
         guard let image = renderCGImage(
             measurements: measurements,
@@ -101,7 +159,8 @@ enum ExportRenderer {
             includeContext: includeContext,
             windowShadow: windowShadow,
             metadata: metadata,
-            markup: markup
+            markup: markup,
+            windowImage: windowImage
         ) else {
             return nil
         }

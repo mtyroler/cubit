@@ -7,3 +7,6 @@ DerivedData/
 *.xcworkspace/xcuserdata/
 RESUME-*.md
 .claude/
+
+# Local dev install helper (machine-specific self-signed identity)
+local-install.sh

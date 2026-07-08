@@ -71,8 +71,13 @@ enum Exporter {
         }
     }
 
-    /// An item provider that drops a PNG file into Finder or other apps.
-    static func dragItemProvider(_ data: Data, filename: String? = nil) -> NSItemProvider {
+    /// An item provider that drops a PNG file into Finder or other apps. The PNG is rendered
+    /// lazily when the drop is accepted (via the async `data` producer) so the drag can carry
+    /// an occlusion-free window capture that isn't ready synchronously at drag start.
+    static func dragItemProvider(
+        filename: String? = nil,
+        data: @escaping @Sendable @MainActor () async -> Data?
+    ) -> NSItemProvider {
         let filename = filename ?? defaultFilename()
         let provider = NSItemProvider()
         provider.suggestedName = filename
@@ -81,12 +86,18 @@ enum Exporter {
             fileOptions: [],
             visibility: .all
         ) { completion in
-            do {
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-                try data.write(to: url)
-                completion(url, false, nil)
-            } catch {
-                completion(nil, false, error)
+            Task {
+                guard let payload = await data() else {
+                    completion(nil, false, nil)
+                    return
+                }
+                do {
+                    let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+                    try payload.write(to: url)
+                    completion(url, false, nil)
+                } catch {
+                    completion(nil, false, error)
+                }
             }
             return nil
         }

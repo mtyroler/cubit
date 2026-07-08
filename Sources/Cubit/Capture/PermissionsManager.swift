@@ -44,8 +44,11 @@ final class PermissionsManager {
     }
 
     func openSystemSettings() {
+        // macOS 26's System Settings uses the PrivacySecurity *extension* pane id; the legacy
+        // `com.apple.preference.security` id is no longer recognized and silently falls back to
+        // General. The `Privacy_ScreenCapture` anchor still selects the Screen Recording list.
         guard let url = URL(string:
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture"
         ) else { return }
         NSWorkspace.shared.open(url)
     }

@@ -89,6 +89,37 @@ final class ScreenCaptureService {
         }
     }
 
+    /// Captures a single window's own content, regardless of what's stacked on top of it.
+    /// `SCContentFilter(desktopIndependentWindow:)` renders the window's backing store, so an
+    /// occluding window never bleeds into the result — this is what an exact-window export
+    /// consumes so the crop is the whole window, not the composited desktop under it.
+    /// Returns nil (caller falls back to the display snapshot crop) if the window is gone or
+    /// capture fails; permission is already established by the display capture at overlay entry.
+    func captureWindow(windowID: CGWindowID) async -> CGImage? {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false,
+                onScreenWindowsOnly: true
+            )
+            guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
+                return nil
+            }
+            let filter = SCContentFilter(desktopIndependentWindow: window)
+            let config = SCStreamConfiguration()
+            config.width = Int((filter.contentRect.width * CGFloat(filter.pointPixelScale)).rounded())
+            config.height = Int((filter.contentRect.height * CGFloat(filter.pointPixelScale)).rounded())
+            config.captureResolution = .best
+            config.showsCursor = false
+            config.ignoreShadowsSingleWindow = true
+            return try await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: config
+            )
+        } catch {
+            return nil
+        }
+    }
+
     /// Pixel dimensions for a display given its point size and backing scale.
     nonisolated static func pixelDimensions(pointWidth: Int, pointHeight: Int, scale: CGFloat) -> (Int, Int) {
         let width = Int((CGFloat(pointWidth) * scale).rounded())
