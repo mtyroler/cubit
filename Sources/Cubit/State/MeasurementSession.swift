@@ -126,8 +126,10 @@ final class MeasurementSession {
         let dy = draft.current.y - draft.anchor.y
         guard (dx * dx + dy * dy).squareRoot() >= minDrag else { return nil }
 
+        let (kind, finalRect) = MeasurementEngine.classifyForCommit(kind: draft.kind, rect: rect)
+
         pushUndo()
-        let measurement = Measurement(kind: draft.kind, rect: rect, colorIndex: nextColorIndex())
+        let measurement = Measurement(kind: kind, rect: finalRect, colorIndex: nextColorIndex())
         measurements.append(measurement)
         selectedID = measurement.id
         return measurement

@@ -219,4 +219,72 @@ final class MeasurementEngineTests: XCTestCase {
         // maxX 300 - 260 = 40, now left of minX 100 → normalized origin 40, width 60
         XCTAssertEqual(resized, CanonicalRect(x: 40, y: 100, width: 60, height: 150))
     }
+
+    // MARK: classifyForCommit — thin-rectangle-to-line reclassification
+    //
+    // Three explicit, non-overlapping regimes around a thin rectangle drag:
+    //   1. below minDrag (handled separately in MeasurementSession.commitDraft) — discarded entirely.
+    //   2. thin (min dimension < 4pt) AND long (max dimension >= 20pt) — reclassified as a line.
+    //   3. everything else — committed as-is (stays a rectangle).
+
+    func testThinTallRectangleConvertsToVertical() {
+        let rect = CanonicalRect(x: 10, y: 20, width: 2, height: 100)
+        let result = MeasurementEngine.classifyForCommit(kind: .rectangle, rect: rect)
+        XCTAssertEqual(result.kind, .vertical)
+        XCTAssertEqual(result.rect, CanonicalRect(x: 10, y: 20, width: 0, height: 100))
+    }
+
+    func testThinWideRectangleConvertsToHorizontal() {
+        let rect = CanonicalRect(x: 10, y: 20, width: 100, height: 2)
+        let result = MeasurementEngine.classifyForCommit(kind: .rectangle, rect: rect)
+        XCTAssertEqual(result.kind, .horizontal)
+        XCTAssertEqual(result.rect, CanonicalRect(x: 10, y: 20, width: 100, height: 0))
+    }
+
+    func testWidthExactlyAtThinThresholdStaysRectangle() {
+        // width == 4 is NOT "< 4" — regime 3, stays a rectangle.
+        let rect = CanonicalRect(x: 0, y: 0, width: 4, height: 100)
+        let result = MeasurementEngine.classifyForCommit(kind: .rectangle, rect: rect)
+        XCTAssertEqual(result.kind, .rectangle)
+        XCTAssertEqual(result.rect, rect)
+    }
+
+    func testWidthJustBelowThinThresholdConverts() {
+        let rect = CanonicalRect(x: 0, y: 0, width: 3.9, height: 100)
+        let result = MeasurementEngine.classifyForCommit(kind: .rectangle, rect: rect)
+        XCTAssertEqual(result.kind, .vertical)
+        XCTAssertEqual(result.rect, CanonicalRect(x: 0, y: 0, width: 0, height: 100))
+    }
+
+    func testMaxDimensionBelowMinLineLengthStaysRectangle() {
+        // Thin (width 2) but too short overall (max dimension 19 < 20) — regime 3.
+        let rect = CanonicalRect(x: 0, y: 0, width: 2, height: 19)
+        let result = MeasurementEngine.classifyForCommit(kind: .rectangle, rect: rect)
+        XCTAssertEqual(result.kind, .rectangle)
+        XCTAssertEqual(result.rect, rect)
+    }
+
+    func testMaxDimensionExactlyAtMinLineLengthConverts() {
+        let rect = CanonicalRect(x: 0, y: 0, width: 2, height: 20)
+        let result = MeasurementEngine.classifyForCommit(kind: .rectangle, rect: rect)
+        XCTAssertEqual(result.kind, .vertical)
+        XCTAssertEqual(result.rect, CanonicalRect(x: 0, y: 0, width: 0, height: 20))
+    }
+
+    func testOrdinaryRectangleUnaffected() {
+        let rect = CanonicalRect(x: 0, y: 0, width: 200, height: 150)
+        let result = MeasurementEngine.classifyForCommit(kind: .rectangle, rect: rect)
+        XCTAssertEqual(result.kind, .rectangle)
+        XCTAssertEqual(result.rect, rect)
+    }
+
+    func testNonRectangleKindsPassThroughUnchanged() {
+        let line = CanonicalRect(x: 0, y: 0, width: 0, height: 500)
+        XCTAssertEqual(MeasurementEngine.classifyForCommit(kind: .vertical, rect: line).kind, .vertical)
+        XCTAssertEqual(MeasurementEngine.classifyForCommit(kind: .vertical, rect: line).rect, line)
+
+        let hLine = CanonicalRect(x: 0, y: 0, width: 500, height: 0)
+        XCTAssertEqual(MeasurementEngine.classifyForCommit(kind: .horizontal, rect: hLine).kind, .horizontal)
+        XCTAssertEqual(MeasurementEngine.classifyForCommit(kind: .horizontal, rect: hLine).rect, hLine)
+    }
 }

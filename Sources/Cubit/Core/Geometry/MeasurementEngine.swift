@@ -123,4 +123,24 @@ enum MeasurementEngine {
         guard total > 0 else { return 0 }
         return Double(value / total) * 100
     }
+
+    /// Rectangle drags with one near-zero dimension are unambiguously line gestures
+    /// (e.g. a fast/imprecise drag with the rectangle tool) — committing them as a
+    /// 0%-area rectangle is a footgun, so they're reclassified as the corresponding
+    /// line kind with the thin axis zeroed. Non-rectangle kinds and rectangles that
+    /// aren't both thin and long enough pass through unchanged.
+    static let thinDimensionThreshold: CGFloat = 4
+    static let minLineLength: CGFloat = 20
+
+    static func classifyForCommit(kind: MeasurementKind, rect: CanonicalRect) -> (kind: MeasurementKind, rect: CanonicalRect) {
+        guard kind == .rectangle else { return (kind, rect) }
+        let minDim = min(rect.width, rect.height)
+        let maxDim = max(rect.width, rect.height)
+        guard minDim < thinDimensionThreshold, maxDim >= minLineLength else { return (kind, rect) }
+
+        if rect.height > rect.width {
+            return (.vertical, CanonicalRect(x: rect.origin.x, y: rect.origin.y, width: 0, height: rect.height))
+        }
+        return (.horizontal, CanonicalRect(x: rect.origin.x, y: rect.origin.y, width: rect.width, height: 0))
+    }
 }

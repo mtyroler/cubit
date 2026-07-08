@@ -92,4 +92,37 @@ final class MeasurementSessionTests: XCTestCase {
         session.undo()
         XCTAssertEqual(session.measurements[0].label, "")
     }
+
+    func testCommitDraftReclassifiesThinTallRectangleAsVerticalLine() {
+        // A fast/imprecise rectangle-tool drag that's thin and long is unambiguously
+        // a line gesture; committing it as a 0%-area rectangle is a footgun.
+        let session = MeasurementSession(screenReference: CanonicalRect(x: 0, y: 0, width: 1440, height: 870), scale: 2)
+        session.tool = .rectangle
+        session.beginDraft(at: CanonicalPoint(x: 100, y: 50), constrain: false, fromCenter: false)
+        session.updateDraft(to: CanonicalPoint(x: 102, y: 670), constrain: false, fromCenter: false)
+        let committed = session.commitDraft()
+
+        XCTAssertEqual(committed?.kind, .vertical)
+        XCTAssertEqual(committed?.rect, CanonicalRect(x: 100, y: 50, width: 0, height: 620))
+
+        let text = MeasurementLabel.text(for: committed!, reference: session.reference, scale: session.referenceScale)
+        XCTAssertEqual(text, "71.3%")
+    }
+
+    func testCommitDraftReclassifiesThinWideRectangleAsHorizontalLine() {
+        let session = MeasurementSession(screenReference: CanonicalRect(x: 0, y: 0, width: 1440, height: 870), scale: 2)
+        session.tool = .rectangle
+        session.beginDraft(at: CanonicalPoint(x: 50, y: 100), constrain: false, fromCenter: false)
+        session.updateDraft(to: CanonicalPoint(x: 950, y: 102), constrain: false, fromCenter: false)
+        let committed = session.commitDraft()
+
+        XCTAssertEqual(committed?.kind, .horizontal)
+        XCTAssertEqual(committed?.rect, CanonicalRect(x: 50, y: 100, width: 900, height: 0))
+    }
+
+    func testCommitDraftKeepsOrdinaryRectangleAsRectangle() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 0, y: 0), to: CanonicalPoint(x: 100, y: 80))
+        XCTAssertEqual(session.measurements[0].kind, .rectangle)
+    }
 }
