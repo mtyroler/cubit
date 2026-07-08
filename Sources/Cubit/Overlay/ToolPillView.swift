@@ -2,9 +2,11 @@ import SwiftUI
 
 struct ToolPillView: View {
     let session: MeasurementSession
+    let appState: AppState
     var onSelectTool: (MeasurementKind) -> Void
     var onCycleMode: () -> Void
     var onBeginCustomFrame: () -> Void
+    var onExport: () -> Void
     var onDismiss: () -> Void
 
     var body: some View {
@@ -32,6 +34,19 @@ struct ToolPillView: View {
                     hintTag("C")
                 }
             }
+
+            divider
+
+            pillButton(action: onExport) {
+                HStack(spacing: 5) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 12, weight: .medium))
+                    hintTag("⌘E")
+                }
+            }
+            .disabled(!appState.captureAvailable)
+            .opacity(appState.captureAvailable ? 1 : 0.4)
+            .help(appState.captureAvailable ? "Export annotated screenshot" : "Screen Recording required")
 
             divider
 

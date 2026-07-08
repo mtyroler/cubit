@@ -6,12 +6,16 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var converter: CoordinateConverter?
     var display: DisplayDescriptor?
     var session: MeasurementSession?
+    var appState: AppState?
     var frozenImage: CGImage? { didSet { needsDisplay = true } }
     var provider: WindowInfoProviding?
     var screenRects: [CanonicalRect] = []
     var excludedPID: pid_t = 0
     var onDismiss: (() -> Void)?
     var onDraftChanged: (() -> Void)?
+    var onExportSave: (() -> Void)?
+    var onExportCopy: (() -> Void)?
+    var exportDragProvider: (() -> NSItemProvider?)?
 
     private struct HandleTarget {
         var xEdge: RectEdge?
@@ -36,6 +40,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
     private var hudHost: NSHostingView<HUDView>?
     private var toolPillHost: NSHostingView<ToolPillView>?
+    private var exportMenuHost: NSHostingView<ExportMenuView>?
+    private var toastHost: NSHostingView<ToastView>?
+    private var toastDismissWork: DispatchWorkItem?
     private var trackingArea: NSTrackingArea?
     private var hovering = false
     private var lastCursor: CanonicalPoint?
@@ -56,12 +63,14 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     }
 
     func installToolPill() {
-        guard let session else { return }
+        guard let session, let appState else { return }
         let view = ToolPillView(
             session: session,
+            appState: appState,
             onSelectTool: { [weak self] kind in self?.selectTool(kind) },
             onCycleMode: { [weak self] in self?.cycleReferenceMode() },
             onBeginCustomFrame: { [weak self] in self?.beginCustomFrame() },
+            onExport: { [weak self] in self?.toggleExportMenu() },
             onDismiss: { [weak self] in self?.onDismiss?() }
         )
         let host = NSHostingView(rootView: view)
@@ -380,6 +389,65 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         toolPillHost.setFrameOrigin(CGPoint(x: x, y: y))
     }
 
+    // MARK: Export menu
+
+    private func toggleExportMenu() {
+        if exportMenuHost != nil { hideExportMenu(); return }
+        guard appState?.captureAvailable == true else { onExportSave?(); return }
+
+        let view = ExportMenuView(
+            onSave: { [weak self] in self?.hideExportMenu(); self?.onExportSave?() },
+            onCopy: { [weak self] in self?.hideExportMenu(); self?.onExportCopy?() },
+            dragProvider: { [weak self] in self?.exportDragProvider?() }
+        )
+        let host = NSHostingView(rootView: view)
+        addSubview(host)
+        exportMenuHost = host
+        host.layoutSubtreeIfNeeded()
+        let size = host.fittingSize
+        host.setFrameSize(size)
+
+        // Above the tool pill, right-aligned to it (the Export button sits on that side).
+        let pillFrame = toolPillHost?.frame ?? CGRect(x: bounds.midX, y: bounds.height - 60, width: 0, height: 0)
+        var x = pillFrame.maxX - size.width
+        x = max(8, min(x, bounds.width - size.width - 8))
+        let y = pillFrame.minY - size.height - 8
+        host.setFrameOrigin(CGPoint(x: x, y: max(8, y)))
+    }
+
+    private func hideExportMenu() {
+        exportMenuHost?.removeFromSuperview()
+        exportMenuHost = nil
+    }
+
+    // MARK: Toast confirmation
+
+    /// Brief confirmation ("Saved to …") near the top of the overlay, auto-dismissed.
+    func showToast(_ message: String) {
+        toastDismissWork?.cancel()
+        toastHost?.removeFromSuperview()
+
+        let host = NSHostingView(rootView: ToastView(message: message))
+        addSubview(host)
+        toastHost = host
+        host.layoutSubtreeIfNeeded()
+        let size = host.fittingSize
+        host.setFrameSize(size)
+        host.setFrameOrigin(CGPoint(x: (bounds.width - size.width) / 2, y: 40))
+        host.alphaValue = 0
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.18; host.animator().alphaValue = 1 }
+
+        let work = DispatchWorkItem { [weak self, weak host] in
+            guard let host else { return }
+            NSAnimationContext.runAnimationGroup({ $0.duration = 0.3; host.animator().alphaValue = 0 }) {
+                host.removeFromSuperview()
+                if self?.toastHost === host { self?.toastHost = nil }
+            }
+        }
+        toastDismissWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: work)
+    }
+
     // MARK: Tool pill actions
 
     private func selectTool(_ kind: MeasurementKind) {
@@ -471,13 +539,20 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         let characters = event.charactersIgnoringModifiers?.lowercased()
 
         if modifiers.contains(.command) {
-            if characters == "z" { session.undo(); refresh() }
+            switch characters {
+            case "z": session.undo(); refresh()
+            case "s": hideExportMenu(); onExportSave?()
+            case "c": hideExportMenu(); onExportCopy?()
+            case "e": toggleExportMenu()
+            default: break
+            }
             return
         }
 
         switch event.keyCode {
         case 53: // Esc
-            if session.selectedID != nil { session.select(nil); refresh() }
+            if exportMenuHost != nil { hideExportMenu() }
+            else if session.selectedID != nil { session.select(nil); refresh() }
             else if session.isDrawingCustom { session.isDrawingCustom = false; session.customDraft = nil; refresh() }
             else if session.draft != nil { session.cancelDraft(); refresh() }
             else { onDismiss?() }
@@ -552,6 +627,13 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     override func mouseDown(with event: NSEvent) {
         guard let session, let point = canonicalLocation(of: event) else { return }
         lastCursor = point
+
+        // A click outside the open export menu dismisses it and is otherwise swallowed.
+        if let menu = exportMenuHost {
+            let viewPoint = convert(event.locationInWindow, from: nil)
+            if !menu.frame.contains(viewPoint) { hideExportMenu() }
+            return
+        }
 
         if editingField != nil { commitLabelEdit() }
 

@@ -89,6 +89,7 @@ final class OverlayController {
         let early = await Self.raceValue(of: captureTask, timeoutMillis: 300)
         let earlyDisplays = Self.displays(from: early)
         capturedDisplays = earlyDisplays
+        appState.captureAvailable = !earlyDisplays.isEmpty
 
         buildWindows(
             screens: screens,
@@ -130,8 +131,12 @@ final class OverlayController {
             canvas.screenRects = screenRects
             canvas.excludedPID = excludedPID
             canvas.frozenImage = captured.first(where: { $0.displayID == descriptor.id })?.cgImage
+            canvas.appState = appState
             canvas.onDismiss = { [weak self] in self?.dismiss() }
             canvas.onDraftChanged = { [weak self] in self?.updateAppState() }
+            canvas.onExportSave = { [weak self] in self?.exportSave() }
+            canvas.onExportCopy = { [weak self] in self?.exportCopy() }
+            canvas.exportDragProvider = { [weak self] in self?.exportDragProvider() }
             canvas.installHUD()
             canvas.installToolPill()
             window.contentView = canvas
@@ -156,6 +161,7 @@ final class OverlayController {
         let displays = Self.displays(from: outcome)
         guard !displays.isEmpty else { return }
         capturedDisplays = displays
+        appState.captureAvailable = true
         for window in windows {
             guard let canvas = window.contentView as? OverlayCanvasView,
                   let id = canvas.display?.id,
@@ -175,9 +181,48 @@ final class OverlayController {
         session = nil
         capturedDisplays = []
         appState.draftPercent = nil
+        appState.captureAvailable = false
 
         previouslyActiveApp?.activate()
         previouslyActiveApp = nil
+    }
+
+    // MARK: Export
+
+    private var canExport: Bool { !capturedDisplays.isEmpty }
+
+    private var frontCanvas: OverlayCanvasView? {
+        (windows.first(where: { $0.isKeyWindow }) ?? windows.first)?.contentView as? OverlayCanvasView
+    }
+
+    private func currentExportPNG() -> Data? {
+        guard let session,
+              let captured = ExportRenderer.captured(for: session.resolved, in: capturedDisplays) else { return nil }
+        return ExportRenderer.renderPNG(
+            measurements: session.measurements,
+            reference: session.resolved,
+            captured: captured
+        )
+    }
+
+    func exportSave() {
+        guard canExport else { showOnboarding(); return }
+        guard let data = currentExportPNG() else { return }
+        if let url = Exporter.saveToFile(data, above: windows as [NSWindow]) {
+            frontCanvas?.showToast("Saved to \(Exporter.abbreviatedPath(url))")
+        }
+    }
+
+    func exportCopy() {
+        guard canExport else { showOnboarding(); return }
+        guard let data = currentExportPNG() else { return }
+        Exporter.copyToPasteboard(data)
+        frontCanvas?.showToast("Copied to clipboard")
+    }
+
+    private func exportDragProvider() -> NSItemProvider? {
+        guard canExport, let data = currentExportPNG() else { return nil }
+        return Exporter.dragItemProvider(data)
     }
 
     private func updateAppState() {
