@@ -202,6 +202,11 @@ private struct ExportSettingsTab: View {
                 }
 
                 Toggle("Copy to clipboard after export", isOn: $settings.copyAfterExport)
+                Toggle("Write JSON sidecar", isOn: $settings.writeJSONSidecar)
+            } footer: {
+                Text("The sidecar is a .json file saved next to the image with the measurement data for tools to parse.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Include surrounding context", isOn: $settings.includeContext)

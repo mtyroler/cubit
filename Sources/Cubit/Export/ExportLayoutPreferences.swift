@@ -26,11 +26,21 @@ struct ExportLayoutPreferences: @unchecked Sendable {
     static let includeContextKey = "export.includeContext"
     static let windowShadowKey = "export.windowShadow"
     static let showTotalsKey = "export.showTotals"
+    /// When true, a file export also writes a `<basename>.json` sidecar describing the
+    /// measurements for machine parsing. Off by default; not part of `ExportFraming` since it
+    /// changes what is written to disk, not how the image is composed.
+    static let jsonSidecarKey = "export.jsonSidecar"
 
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+    }
+
+    /// Defaults to false when unset.
+    var writeJSONSidecar: Bool {
+        get { defaults.bool(forKey: Self.jsonSidecarKey) }
+        nonmutating set { defaults.set(newValue, forKey: Self.jsonSidecarKey) }
     }
 
     var includeContext: Bool {

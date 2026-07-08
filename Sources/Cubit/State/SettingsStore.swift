@@ -164,6 +164,14 @@ final class SettingsStore {
         set { defaults.set(newValue, forKey: ExportLayoutPreferences.windowShadowKey) }
     }
 
+    /// Write a JSON sidecar next to each file export. Off by default; owned by
+    /// `ExportLayoutPreferences` (the `export.*` key namespace), forwarded here like the
+    /// framing/metadata toggles above.
+    var writeJSONSidecar: Bool {
+        get { defaults.bool(forKey: ExportLayoutPreferences.jsonSidecarKey) }
+        set { defaults.set(newValue, forKey: ExportLayoutPreferences.jsonSidecarKey) }
+    }
+
     /// Reflects (and drives) the system login-item registration via SMAppService. A no-op
     /// under XCTest so tests never register/unregister a real login item.
     var launchAtLogin: Bool {

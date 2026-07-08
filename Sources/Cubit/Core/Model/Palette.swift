@@ -22,8 +22,25 @@ enum Palette {
         PaletteColor(red: 0.600, green: 0.600, blue: 0.600)  // neutral gray
     ]
 
+    /// Stable, human-readable names paralleling `colors` (Okabe-Ito). Used by the JSON
+    /// sidecar so an agent can refer to a measurement's color by name, not just index.
+    static let colorNames: [String] = [
+        "orange",
+        "sky blue",
+        "bluish green",
+        "yellow",
+        "blue",
+        "vermillion",
+        "reddish purple",
+        "gray"
+    ]
+
     static func color(forIndex index: Int) -> PaletteColor {
         colors[index % colors.count]
+    }
+
+    static func name(forIndex index: Int) -> String {
+        colorNames[((index % colorNames.count) + colorNames.count) % colorNames.count]
     }
 
     /// Wraps `index` one step forward or backward through the palette (index 0 follows the

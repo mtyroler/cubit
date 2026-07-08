@@ -108,4 +108,23 @@ enum Exporter {
     static func abbreviatedPath(_ url: URL) -> String {
         (url.path as NSString).abbreviatingWithTildeInPath
     }
+
+    /// The JSON sidecar location for a saved PNG: same basename, `.json` extension.
+    nonisolated static func sidecarURL(for imageURL: URL) -> URL {
+        imageURL.deletingPathExtension().appendingPathExtension("json")
+    }
+
+    /// Writes the JSON sidecar next to a saved image. A failure here is swallowed on purpose:
+    /// the image export already succeeded and must never be undone by a sidecar problem.
+    /// Returns the written URL, or nil if encoding/writing failed.
+    @discardableResult
+    nonisolated static func writeSidecar(_ sidecar: MeasurementSidecar, besideImageAt imageURL: URL) -> URL? {
+        let url = sidecarURL(for: imageURL)
+        do {
+            try sidecar.jsonData().write(to: url)
+            return url
+        } catch {
+            return nil
+        }
+    }
 }

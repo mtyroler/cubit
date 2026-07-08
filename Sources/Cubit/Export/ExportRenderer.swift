@@ -11,20 +11,29 @@ enum ExportRenderer {
     /// Context padding around a window/custom reference so it doesn't sit flush to the edge.
     static let cropPadding: CGFloat = 48
 
-    /// Renders the annotated image as a CGImage at the display's native pixel resolution.
-    /// `metadata` is empty by default — exports carry zero identifying content unless the
-    /// caller explicitly opts in (M6b).
-    static func renderCGImage(
-        measurements: [Measurement],
+    /// The exact crop the renderer draws: which pixels to draw, where they sit in canonical
+    /// space, and the framing flags. Shared by the image render and the JSON sidecar so both
+    /// describe the identical crop — no drift.
+    struct ExportGeometry {
+        let image: CGImage
+        let cropRect: CanonicalRect
+        let pointSize: CGSize
+        let pixelWidth: Int
+        let pixelHeight: Int
+        let styled: Bool
+        let isOpaque: Bool
+    }
+
+    /// Resolves the crop geometry for an export. Mirrors the two paths the app uses: a clean
+    /// occlusion-free window capture (exact-window mode), or a crop of the composited display
+    /// snapshot (context/screen/custom). Returns nil when the crop is empty.
+    static func geometry(
         reference: ResolvedReference,
         captured: CapturedDisplay,
-        includeContext: Bool = false,
-        windowShadow: Bool = true,
-        metadata: ExportMetadata = ExportMetadata(),
-        markup: MarkupStyle = .default,
-        windowImage: CGImage? = nil,
-        showTotals: Bool = false
-    ) -> CGImage? {
+        includeContext: Bool,
+        windowShadow: Bool,
+        windowImage: CGImage?
+    ) -> ExportGeometry? {
         let scale = captured.scale
         let displayFrame = captured.canonicalFrame
 
@@ -33,15 +42,18 @@ enum ExportRenderer {
         // would bake in whatever window was stacked on top. Context/screen/custom exports keep
         // the display-snapshot crop — their whole point is the surrounding desktop.
         if let windowImage, reference.mode == .windowUnderCursor, !includeContext {
-            return renderWindowImage(
-                windowImage,
-                measurements: measurements,
-                reference: reference,
-                scale: scale,
-                windowShadow: windowShadow,
-                metadata: metadata,
-                markup: markup,
-                showTotals: showTotals
+            let pointSize = CGSize(width: CGFloat(windowImage.width) / scale, height: CGFloat(windowImage.height) / scale)
+            let cropRect = CanonicalRect(origin: reference.rect.origin, width: pointSize.width, height: pointSize.height)
+            // A single-window capture carries transparent rounded corners, so the render is
+            // never opaque. The shadow toggle picks native-window framing vs. a plain crop.
+            return ExportGeometry(
+                image: windowImage,
+                cropRect: cropRect,
+                pointSize: pointSize,
+                pixelWidth: windowImage.width,
+                pixelHeight: windowImage.height,
+                styled: windowShadow,
+                isOpaque: false
             )
         }
 
@@ -70,72 +82,74 @@ enum ExportRenderer {
             height: pointSize.height
         )
 
-        let request = buildRequest(
-            measurements: measurements,
-            reference: reference,
-            scale: scale,
-            cropRect: cropForEngine,
-            imageSize: pointSize,
-            metadata: metadata,
-            markup: markup,
-            showTotals: showTotals
-        )
-        let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
-
         // Native-window styling (rounded corners + shadow in transparent margins) applies to
         // an exact window crop only — never a padded context shot or a screen/custom region.
         let styled = windowStyled(mode: reference.mode, includeContext: includeContext, windowShadow: windowShadow)
-        if styled {
-            let renderer = ImageRenderer(content: StyledWindowExportView(layout: layout, image: cropped))
-            renderer.scale = scale
-            renderer.isOpaque = false
-            return renderer.cgImage
-        }
-        let renderer = ImageRenderer(content: ScreenshotAnnotationView(layout: layout, image: cropped))
-        renderer.scale = scale
-        renderer.isOpaque = true
-        return renderer.cgImage
+        return ExportGeometry(
+            image: cropped,
+            cropRect: cropForEngine,
+            pointSize: pointSize,
+            pixelWidth: cropped.width,
+            pixelHeight: cropped.height,
+            styled: styled,
+            isOpaque: !styled
+        )
     }
 
-    /// Renders an annotated export from a clean, occlusion-free window capture. The image IS
-    /// the reference window at native resolution, so the crop rect is simply the window bounds
-    /// and annotations (in canonical space) map directly onto it — no display-snapshot crop.
-    private static func renderWindowImage(
-        _ image: CGImage,
+    /// Renders the annotated image as a CGImage at the display's native pixel resolution.
+    /// `metadata` is empty by default — exports carry zero identifying content unless the
+    /// caller explicitly opts in (M6b).
+    static func renderCGImage(
+        measurements: [Measurement],
+        reference: ResolvedReference,
+        captured: CapturedDisplay,
+        includeContext: Bool = false,
+        windowShadow: Bool = true,
+        metadata: ExportMetadata = ExportMetadata(),
+        markup: MarkupStyle = .default,
+        windowImage: CGImage? = nil,
+        showTotals: Bool = false
+    ) -> CGImage? {
+        guard let geo = geometry(
+            reference: reference,
+            captured: captured,
+            includeContext: includeContext,
+            windowShadow: windowShadow,
+            windowImage: windowImage
+        ) else { return nil }
+        return renderCGImage(geometry: geo, measurements: measurements, reference: reference, scale: captured.scale, metadata: metadata, markup: markup, showTotals: showTotals)
+    }
+
+    private static func renderCGImage(
+        geometry geo: ExportGeometry,
         measurements: [Measurement],
         reference: ResolvedReference,
         scale: CGFloat,
-        windowShadow: Bool,
         metadata: ExportMetadata,
         markup: MarkupStyle,
         showTotals: Bool
     ) -> CGImage? {
-        let pointSize = CGSize(width: CGFloat(image.width) / scale, height: CGFloat(image.height) / scale)
-        let cropRect = CanonicalRect(origin: reference.rect.origin, width: pointSize.width, height: pointSize.height)
-
         let request = buildRequest(
             measurements: measurements,
             reference: reference,
             scale: scale,
-            cropRect: cropRect,
-            imageSize: pointSize,
+            cropRect: geo.cropRect,
+            imageSize: geo.pointSize,
             metadata: metadata,
             markup: markup,
             showTotals: showTotals
         )
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
-        // A single-window capture carries transparent rounded corners, so the render is never
-        // opaque. The shadow toggle picks the native-window framing vs. a plain annotated crop.
-        if windowShadow {
-            let renderer = ImageRenderer(content: StyledWindowExportView(layout: layout, image: image))
+        if geo.styled {
+            let renderer = ImageRenderer(content: StyledWindowExportView(layout: layout, image: geo.image))
             renderer.scale = scale
-            renderer.isOpaque = false
+            renderer.isOpaque = geo.isOpaque
             return renderer.cgImage
         }
-        let renderer = ImageRenderer(content: ScreenshotAnnotationView(layout: layout, image: image))
+        let renderer = ImageRenderer(content: ScreenshotAnnotationView(layout: layout, image: geo.image))
         renderer.scale = scale
-        renderer.isOpaque = false
+        renderer.isOpaque = geo.isOpaque
         return renderer.cgImage
     }
 
@@ -172,6 +186,79 @@ enum ExportRenderer {
             return nil
         }
         return pngData(from: image)
+    }
+
+    /// The PNG plus its optional JSON sidecar, built from a single shared crop so both
+    /// describe the identical export. `sidecar` is always produced (it's cheap); the caller
+    /// decides whether to write it.
+    struct RenderedExport {
+        let png: Data
+        let sidecar: MeasurementSidecar
+    }
+
+    /// Renders the PNG and builds the matching sidecar in one pass over the crop geometry.
+    static func renderExport(
+        measurements: [Measurement],
+        reference: ResolvedReference,
+        captured: CapturedDisplay,
+        includeContext: Bool = false,
+        windowShadow: Bool = true,
+        metadata: ExportMetadata = ExportMetadata(),
+        markup: MarkupStyle = .default,
+        windowImage: CGImage? = nil,
+        showTotals: Bool = false
+    ) -> RenderedExport? {
+        guard let geo = geometry(
+            reference: reference,
+            captured: captured,
+            includeContext: includeContext,
+            windowShadow: windowShadow,
+            windowImage: windowImage
+        ) else { return nil }
+
+        guard let image = renderCGImage(
+            geometry: geo,
+            measurements: measurements,
+            reference: reference,
+            scale: captured.scale,
+            metadata: metadata,
+            markup: markup,
+            showTotals: showTotals
+        ), let png = pngData(from: image) else { return nil }
+
+        let sidecar = self.sidecar(
+            geometry: geo,
+            measurements: measurements,
+            reference: reference,
+            scale: captured.scale,
+            showTotals: showTotals
+        )
+        return RenderedExport(png: png, sidecar: sidecar)
+    }
+
+    /// Builds the sidecar from the shared crop geometry. Totals mirror the legend exactly:
+    /// present only when the export shows them.
+    static func sidecar(
+        geometry geo: ExportGeometry,
+        measurements: [Measurement],
+        reference: ResolvedReference,
+        scale: CGFloat,
+        showTotals: Bool
+    ) -> MeasurementSidecar {
+        let totals = showTotals ? measurementTotals(measurements, reference: reference.rect, scale: scale) : []
+        return MeasurementSidecar.make(
+            measurements: measurements,
+            referenceRect: reference.rect,
+            referenceMode: reference.mode,
+            referenceName: reference.descriptor.isEmpty ? nil : reference.descriptor,
+            scale: scale,
+            cropRect: geo.cropRect,
+            pixelWidth: geo.pixelWidth,
+            pixelHeight: geo.pixelHeight,
+            totals: totals,
+            valueText: { primaryText($0) },
+            detailText: { detailText(kind: $0, metrics: $1) }
+        )
     }
 
     /// The captured display that owns the reference (v0.1: the one containing its center).
@@ -317,11 +404,11 @@ enum ExportRenderer {
         return lines
     }
 
-    static func primaryText(_ metrics: Metrics) -> String {
+    nonisolated static func primaryText(_ metrics: Metrics) -> String {
         String(format: "%.1f%%", metrics.primaryPercent)
     }
 
-    static func detailText(kind: MeasurementKind, metrics: Metrics) -> String {
+    nonisolated static func detailText(kind: MeasurementKind, metrics: Metrics) -> String {
         switch kind {
         case .rectangle:
             return "\(Int(metrics.widthPx.rounded()))×\(Int(metrics.heightPx.rounded())) px"

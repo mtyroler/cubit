@@ -246,7 +246,7 @@ final class OverlayController {
         pendingFraming ?? layoutPreferences.framing
     }
 
-    private func currentExportPNG() async -> Data? {
+    private func currentExport() async -> ExportRenderer.RenderedExport? {
         guard let session,
               let captured = ExportRenderer.captured(for: session.resolved, in: capturedDisplays) else { return nil }
         let reference = session.resolved
@@ -273,7 +273,7 @@ final class OverlayController {
             fillOpacity: CGFloat(settings.measurementFillOpacity),
             labelPointSize: CGFloat(settings.labelTextSize.pointSize)
         )
-        return ExportRenderer.renderPNG(
+        return ExportRenderer.renderExport(
             measurements: session.measurements,
             reference: reference,
             captured: captured,
@@ -289,9 +289,14 @@ final class OverlayController {
     func exportSave() {
         guard canExport else { showOnboarding(); return }
         Task { @MainActor in
-            guard let data = await currentExportPNG() else { return }
+            guard let export = await currentExport() else { return }
             let directoryURL = Exporter.resolvedSaveDirectory(forPath: settings.defaultExportFolderPath)
-            if let url = Exporter.saveToFile(data, above: windows as [NSWindow], directoryURL: directoryURL) {
+            if let url = Exporter.saveToFile(export.png, above: windows as [NSWindow], directoryURL: directoryURL) {
+                // The sidecar rides alongside a file save only, and never blocks the image:
+                // a failure to write it is swallowed inside `writeSidecar`.
+                if settings.writeJSONSidecar {
+                    Exporter.writeSidecar(export.sidecar, besideImageAt: url)
+                }
                 frontCanvas?.showToast("Saved to \(Exporter.abbreviatedPath(url))")
             }
         }
@@ -300,8 +305,8 @@ final class OverlayController {
     func exportCopy() {
         guard canExport else { showOnboarding(); return }
         Task { @MainActor in
-            guard let data = await currentExportPNG() else { return }
-            Exporter.copyToPasteboard(data)
+            guard let export = await currentExport() else { return }
+            Exporter.copyToPasteboard(export.png)
             frontCanvas?.showToast("Copied to clipboard")
         }
     }
@@ -309,7 +314,7 @@ final class OverlayController {
     private func exportDragProvider() -> NSItemProvider? {
         guard canExport else { return nil }
         return Exporter.dragItemProvider { [weak self] in
-            await self?.currentExportPNG() ?? nil
+            await self?.currentExport()?.png
         }
     }
 
