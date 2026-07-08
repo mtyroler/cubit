@@ -47,6 +47,8 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     private var exportMenuHost: NSHostingView<ExportMenuView>?
     private var toastHost: NSHostingView<ToastView>?
     private var toastDismissWork: DispatchWorkItem?
+    private var toolFlashHost: NSHostingView<ToolSwitchFlashView>?
+    private var toolFlashDismissWork: DispatchWorkItem?
     private var trackingArea: NSTrackingArea?
     private var hovering = false
     private var lastCursor: CanonicalPoint?
@@ -341,11 +343,40 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         return nil
     }
 
+    // MARK: Cursor
+
+    /// The overlay's whole bounds gets one cursor rect reflecting the active tool
+    /// (or the custom-reference draw state); AppKit re-invokes this whenever a
+    /// subview's own cursor rects don't claim the point, so it composes correctly
+    /// with the tool pill/HUD/export menu/label-edit text field sitting on top.
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: currentToolCursor())
+    }
+
+    private func currentToolCursor() -> NSCursor {
+        guard let session else { return .crosshair }
+        let style: CursorStyle = session.isDrawingCustom
+            ? .customFrame
+            : CursorStyleCatalog.style(forTool: session.tool)
+        return ToolCursorFactory.cursor(for: style)
+    }
+
+    /// Cursor rects only get re-evaluated by AppKit on the next opportunity
+    /// (mouse enter, resize, …); invalidate on every state change so a tool/mode
+    /// switch is reflected right away, and force it immediately if the pointer is
+    /// already inside our bounds rather than waiting for the next mouse event.
+    private func updateCursor() {
+        window?.invalidateCursorRects(for: self)
+        if hovering { currentToolCursor().set() }
+    }
+
     // MARK: HUD positioning
 
     private func refresh() {
         needsDisplay = true
         updateHUD()
+        updateCursor()
         onDraftChanged?()
     }
 
@@ -456,10 +487,58 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: work)
     }
 
+    // MARK: Tool switch flash
+
+    /// Brief label near the cursor when the active tool/state changes (key or pill
+    /// click) — fades in, holds, fades out after ~700ms. The tool pill alone is too
+    /// peripheral to register a switch.
+    private func showToolFlash(_ label: String) {
+        toolFlashDismissWork?.cancel()
+        toolFlashHost?.removeFromSuperview()
+
+        let host = NSHostingView(rootView: ToolSwitchFlashView(label: label))
+        addSubview(host)
+        toolFlashHost = host
+        host.layoutSubtreeIfNeeded()
+        let size = host.fittingSize
+        host.setFrameSize(size)
+        host.setFrameOrigin(flashOrigin(for: size))
+
+        host.alphaValue = 0
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.12; host.animator().alphaValue = 1 }
+
+        let work = DispatchWorkItem { [weak self, weak host] in
+            guard let host else { return }
+            NSAnimationContext.runAnimationGroup({ $0.duration = 0.25; host.animator().alphaValue = 0 }) {
+                host.removeFromSuperview()
+                if self?.toolFlashHost === host { self?.toolFlashHost = nil }
+            }
+        }
+        toolFlashDismissWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
+    }
+
+    private func flashOrigin(for size: CGSize) -> CGPoint {
+        let anchor: CGPoint
+        if hovering, let lastCursor, let converter, let display {
+            let local = converter.displayLocal(lastCursor, on: display)
+            anchor = CGPoint(x: local.x, y: local.y)
+        } else {
+            anchor = CGPoint(x: bounds.midX, y: bounds.midY)
+        }
+
+        let x = max(8, min(anchor.x + 20, bounds.width - size.width - 8))
+        let y = max(8, min(anchor.y + 20, bounds.height - size.height - 8))
+        return CGPoint(x: x, y: y)
+    }
+
     // MARK: Tool pill actions
 
     private func selectTool(_ kind: MeasurementKind) {
-        session?.tool = kind
+        guard let session else { return }
+        let changed = session.tool != kind || session.isDrawingCustom
+        session.tool = kind
+        if changed { showToolFlash(CursorStyleCatalog.flashLabel(for: CursorStyleCatalog.style(forTool: kind))) }
         refresh()
     }
 
@@ -471,7 +550,10 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     }
 
     private func beginCustomFrame() {
-        session?.beginCustomDraw()
+        guard let session else { return }
+        let changed = !session.isDrawingCustom
+        session.beginCustomDraw()
+        if changed { showToolFlash(CursorStyleCatalog.flashLabel(for: .customFrame)) }
         refresh()
     }
 

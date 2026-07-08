@@ -76,3 +76,19 @@ struct HUDView: View {
         String(format: "%.1f%%", value)
     }
 }
+
+/// Brief label shown near the cursor when the active tool/state changes (key or
+/// pill click) — the tool pill alone is too peripheral to notice a switch.
+struct ToolSwitchFlashView: View {
+    let label: String
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 12, weight: .semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 1))
+            .fixedSize()
+    }
+}
