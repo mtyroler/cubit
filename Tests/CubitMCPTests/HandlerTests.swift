@@ -24,13 +24,13 @@ final class HandlerTests: XCTestCase {
         XCTAssertNotNil(result["capabilities"]?["tools"])
     }
 
-    func testToolsListReturnsFourToolsWithObjectSchemas() throws {
+    func testToolsListReturnsAllToolsWithObjectSchemas() throws {
         let response = try respond(#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#)
         let tools = try XCTUnwrap(response["result"]?["tools"])
         guard case .array(let items) = tools else { return XCTFail("tools is not an array") }
-        XCTAssertEqual(items.count, 4)
+        XCTAssertEqual(items.count, 5)
         let names = Set(items.compactMap { $0["name"]?.stringValue })
-        XCTAssertEqual(names, ["list_windows", "measure_region", "annotate_screenshot", "analyze_dead_space"])
+        XCTAssertEqual(names, ["list_windows", "measure_region", "annotate_screenshot", "show_overlay", "analyze_dead_space"])
         for item in items {
             XCTAssertFalse(item["description"]?.stringValue?.isEmpty ?? true)
             XCTAssertEqual(item["inputSchema"]?["type"]?.stringValue, "object", "\(item["name"]?.stringValue ?? "?") schema must be an object")

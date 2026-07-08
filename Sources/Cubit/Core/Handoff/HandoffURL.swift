@@ -64,8 +64,9 @@ enum HandoffURL {
         return nil
     }
 
-    /// Decodes a base64url string (RFC 4648 §5: `-`→`+`, `_`→`/`, padding optional). Tolerates
-    /// embedded whitespace/newlines. Returns nil when the payload isn't valid base64url.
+    /// Decodes a base64url string (RFC 4648 §5: `-`→`+`, `_`→`/`, padding optional). Strict —
+    /// returns nil for anything that isn't valid base64url — so a malformed inline payload becomes
+    /// a clean no-op rather than silently decoding to garbage.
     static func decodeBase64URL(_ string: String) -> Data? {
         var normalized = string
             .replacingOccurrences(of: "-", with: "+")
@@ -74,7 +75,7 @@ enum HandoffURL {
         if remainder != 0 {
             normalized += String(repeating: "=", count: 4 - remainder)
         }
-        return Data(base64Encoded: normalized, options: [.ignoreUnknownCharacters])
+        return Data(base64Encoded: normalized)
     }
 
     /// Builds a `cubit://show?path=…` URL for the given absolute path, percent-encoding the path.

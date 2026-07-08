@@ -139,7 +139,7 @@ final class SecurityTests: XCTestCase {
         let value = try JSONValue.parse(good)
         XCTAssertEqual(value["id"]?.intValue, 9)
         guard case .array(let tools)? = value["result"]?["tools"] else { return XCTFail("no tools array") }
-        XCTAssertEqual(tools.count, 4)
+        XCTAssertEqual(tools.count, 5)
     }
 
     func testUnknownMethodThenGoodBothSucceed() throws {
