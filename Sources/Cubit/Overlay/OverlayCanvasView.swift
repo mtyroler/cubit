@@ -583,8 +583,18 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
     // MARK: Toast confirmation
 
-    /// Brief confirmation ("Saved to …") near the top of the overlay, auto-dismissed.
-    func showToast(_ message: String) {
+    /// Redraw and refresh the edit-affordance cursors after agent-proposed measurements are
+    /// injected into the session (the handoff arrives from outside the normal event flow). The
+    /// selected injected measurement's handles become live immediately.
+    func refreshAfterHandoff() {
+        needsDisplay = true
+        window?.invalidateCursorRects(for: self)
+        if hovering { (editCursor() ?? currentToolCursor()).set() }
+    }
+
+    /// Brief confirmation ("Saved to …") near the top of the overlay, auto-dismissed. A handoff
+    /// arrival uses a longer hold so the user notices the proposal.
+    func showToast(_ message: String, duration: TimeInterval = 2.4) {
         toastDismissWork?.cancel()
         toastHost?.removeFromSuperview()
 
@@ -606,7 +616,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             }
         }
         toastDismissWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
     }
 
     // MARK: Tool switch flash

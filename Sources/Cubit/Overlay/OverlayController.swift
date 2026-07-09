@@ -19,6 +19,13 @@ final class OverlayController {
     private var presenting = false
     private var continuedWithout = false
 
+    /// Canonical frames of the screens the current overlay spans; used to clamp an incoming
+    /// handoff into reachable bounds. Set when the overlay presents, cleared on dismiss.
+    private var canonicalScreenRects: [CanonicalRect] = []
+    /// A handoff that arrived while the overlay wasn't presented yet — injected once
+    /// `presentOverlay()` has built the session and windows.
+    private var pendingHandoff: (measurements: [Measurement], note: String?)?
+
     /// Snapshots captured at overlay entry, held until dismiss. M6's exporter consumes these.
     private(set) var capturedDisplays: [CapturedDisplay] = []
 
@@ -77,6 +84,7 @@ final class OverlayController {
             primaryScreenHeight: primaryHeight,
             displays: descriptors
         )
+        canonicalScreenRects = descriptors.map(converter.canonicalFrame(of:))
 
         let primaryDescriptor = descriptors[0]
         let session = MeasurementSession(
@@ -115,6 +123,12 @@ final class OverlayController {
             captured: earlyDisplays
         )
         orderWindowsFront()
+
+        // A handoff queued before the overlay existed injects now that the session and windows do.
+        if let pending = pendingHandoff {
+            pendingHandoff = nil
+            injectHandoff(pending.measurements, note: pending.note)
+        }
 
         // Capture didn't beat the timeout — swap the frozen background in when it lands.
         if early == nil {
@@ -219,11 +233,53 @@ final class OverlayController {
         windows.removeAll()
         session = nil
         capturedDisplays = []
+        canonicalScreenRects = []
         appState.draftPercent = nil
         appState.captureAvailable = false
 
         previouslyActiveApp?.activate()
         previouslyActiveApp = nil
+    }
+
+    // MARK: Handoff (live-overlay, M4)
+
+    /// Entry point for an agent's live-overlay handoff. The measurements are already validated +
+    /// mapped from the `cubit://` document by Core (`HandoffMapper`); this presents the overlay if
+    /// needed and injects them as editable shapes. If the overlay is already open, they're injected
+    /// into the current session rather than tearing it down. `note` is an optional agent message
+    /// surfaced in the arrival toast.
+    func handleHandoff(_ proposed: [Measurement], note: String?) {
+        guard !proposed.isEmpty else { return }
+        if isPresented {
+            injectHandoff(proposed, note: note)
+        } else {
+            pendingHandoff = (proposed, note)
+            present()
+        }
+    }
+
+    private func injectHandoff(_ proposed: [Measurement], note: String?) {
+        guard let session else { return }
+        // Clamp into the live screen bounds so an off-screen or oversized proposal stays reachable.
+        let bounds = canonicalScreenRects.isEmpty ? [session.reference] : canonicalScreenRects
+        let clamped = HandoffMapper.clamped(proposed, to: bounds)
+        guard session.injectProposed(clamped) else { return }
+
+        // The session is shared across every screen's canvas — redraw them all (a measurement may
+        // land on any display), and surface the arrival toast on the front one.
+        for window in windows {
+            (window.contentView as? OverlayCanvasView)?.refreshAfterHandoff()
+        }
+        frontCanvas?.showToast(Self.handoffMessage(count: clamped.count, note: note), duration: 4.5)
+        updateAppState()
+    }
+
+    private static func handoffMessage(count: Int, note: String?) -> String {
+        let plural = count == 1 ? "" : "s"
+        if let note, !note.isEmpty {
+            return "\(note) — \(count) proposed, adjust or ⌘E to export"
+        }
+        return "Agent proposed \(count) measurement\(plural) — adjust or ⌘E to export"
     }
 
     // MARK: Export

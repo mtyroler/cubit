@@ -113,6 +113,27 @@ enum Schemas {
         """
     }
 
+    // show_overlay ----------------------------------------------------------
+
+    static var showOverlay: String {
+        """
+        {
+          "type": "object",
+          "properties": {
+            "measurements": {
+              "type": "array",
+              "description": "Proposed measurements in CANONICAL points (top-left origin, y-down) — the same space list_windows frames use. They appear as EDITABLE shapes on the user's real screen.",
+              "items": \(regionItem(space: "canonical points")),
+              "minItems": 1,
+              "maxItems": 200
+            },
+            "note": { "type": "string", "description": "Optional short message shown in the overlay when the proposal arrives." }
+          },
+          "required": ["measurements"]
+        }
+        """
+    }
+
     // analyze_dead_space ----------------------------------------------------
 
     static var analyzeDeadSpace: String {
