@@ -211,8 +211,18 @@ private struct ExportSettingsTab: View {
             Section {
                 Toggle("Include surrounding context", isOn: $settings.includeContext)
                 Toggle("Window shadow", isOn: $settings.windowShadow)
+                Picker("Background", selection: $settings.exportBackground) {
+                    ForEach(ExportBackgroundStyle.allCases, id: \.self) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+                .disabled(!settings.windowShadow || settings.includeContext)
             } header: {
                 Text("Layout")
+            } footer: {
+                Text("The background fills the margins around styled window exports — a studio sweep, a gradient, or a classic Mac OS desktop.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Machine name", isOn: $settings.imprintMachineName)

@@ -21,6 +21,7 @@ struct ExportMenuView: View {
     @State private var includeContext: Bool
     @State private var windowShadow: Bool
     @State private var showTotals: Bool
+    @State private var background: ExportBackgroundStyle
     @State private var remember = false
 
     init(
@@ -43,6 +44,7 @@ struct ExportMenuView: View {
         _includeContext = State(initialValue: initialFraming.includeContext)
         _windowShadow = State(initialValue: initialFraming.windowShadow)
         _showTotals = State(initialValue: initialFraming.showTotals)
+        _background = State(initialValue: initialFraming.background)
     }
 
     private var currentToggles: MetadataToggles {
@@ -50,7 +52,12 @@ struct ExportMenuView: View {
     }
 
     private var currentFraming: ExportFraming {
-        ExportFraming(includeContext: includeContext, windowShadow: windowShadow, showTotals: showTotals)
+        ExportFraming(
+            includeContext: includeContext,
+            windowShadow: windowShadow,
+            showTotals: showTotals,
+            background: background
+        )
     }
 
     private func notifyChange() {
@@ -112,6 +119,19 @@ struct ExportMenuView: View {
             .toggleStyle(.checkbox)
             .help("Add a summed total per kind to the legend: rectangle area, horizontal width, vertical height")
 
+            Picker(selection: $background) {
+                ForEach(ExportBackgroundStyle.allCases, id: \.self) { style in
+                    Text(style.displayName).tag(style)
+                }
+            } label: {
+                Text("Background")
+                    .font(.system(size: 11))
+            }
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .disabled(!windowShadow || includeContext)
+            .help("Fill the margins around a styled window export: studio, gradient, or a classic Mac OS desktop")
+
             Divider().padding(.vertical, 2)
 
             Text("METADATA")
@@ -139,6 +159,7 @@ struct ExportMenuView: View {
         .onChange(of: includeContext) { _, _ in notifyChange() }
         .onChange(of: windowShadow) { _, _ in notifyChange() }
         .onChange(of: showTotals) { _, _ in notifyChange() }
+        .onChange(of: background) { _, _ in notifyChange() }
         .padding(10)
         .frame(width: 208)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

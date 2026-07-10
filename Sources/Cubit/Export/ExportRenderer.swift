@@ -108,7 +108,8 @@ enum ExportRenderer {
         metadata: ExportMetadata = ExportMetadata(),
         markup: MarkupStyle = .default,
         windowImage: CGImage? = nil,
-        showTotals: Bool = false
+        showTotals: Bool = false,
+        background: ExportBackgroundStyle = .transparent
     ) -> CGImage? {
         guard let geo = geometry(
             reference: reference,
@@ -117,7 +118,7 @@ enum ExportRenderer {
             windowShadow: windowShadow,
             windowImage: windowImage
         ) else { return nil }
-        return renderCGImage(geometry: geo, measurements: measurements, reference: reference, scale: captured.scale, metadata: metadata, markup: markup, showTotals: showTotals)
+        return renderCGImage(geometry: geo, measurements: measurements, reference: reference, scale: captured.scale, metadata: metadata, markup: markup, showTotals: showTotals, background: background)
     }
 
     private static func renderCGImage(
@@ -127,7 +128,8 @@ enum ExportRenderer {
         scale: CGFloat,
         metadata: ExportMetadata,
         markup: MarkupStyle,
-        showTotals: Bool
+        showTotals: Bool,
+        background: ExportBackgroundStyle = .transparent
     ) -> CGImage? {
         let request = buildRequest(
             measurements: measurements,
@@ -142,7 +144,7 @@ enum ExportRenderer {
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
         if geo.styled {
-            let renderer = ImageRenderer(content: StyledWindowExportView(layout: layout, image: geo.image))
+            let renderer = ImageRenderer(content: StyledWindowExportView(layout: layout, image: geo.image, background: background))
             renderer.scale = scale
             renderer.isOpaque = geo.isOpaque
             return renderer.cgImage
@@ -170,7 +172,8 @@ enum ExportRenderer {
         metadata: ExportMetadata = ExportMetadata(),
         markup: MarkupStyle = .default,
         windowImage: CGImage? = nil,
-        showTotals: Bool = false
+        showTotals: Bool = false,
+        background: ExportBackgroundStyle = .transparent
     ) -> Data? {
         guard let image = renderCGImage(
             measurements: measurements,
@@ -181,7 +184,8 @@ enum ExportRenderer {
             metadata: metadata,
             markup: markup,
             windowImage: windowImage,
-            showTotals: showTotals
+            showTotals: showTotals,
+            background: background
         ) else {
             return nil
         }
@@ -206,7 +210,8 @@ enum ExportRenderer {
         metadata: ExportMetadata = ExportMetadata(),
         markup: MarkupStyle = .default,
         windowImage: CGImage? = nil,
-        showTotals: Bool = false
+        showTotals: Bool = false,
+        background: ExportBackgroundStyle = .transparent
     ) -> RenderedExport? {
         guard let geo = geometry(
             reference: reference,
@@ -223,7 +228,8 @@ enum ExportRenderer {
             scale: captured.scale,
             metadata: metadata,
             markup: markup,
-            showTotals: showTotals
+            showTotals: showTotals,
+            background: background
         ), let png = pngData(from: image) else { return nil }
 
         let sidecar = self.sidecar(

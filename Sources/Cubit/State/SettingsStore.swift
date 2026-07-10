@@ -164,6 +164,12 @@ final class SettingsStore {
         set { defaults.set(newValue, forKey: ExportLayoutPreferences.windowShadowKey) }
     }
 
+    /// Default background behind styled window exports. Transparent when unset.
+    var exportBackground: ExportBackgroundStyle {
+        get { ExportBackgroundStyle(rawValue: defaults.string(forKey: ExportLayoutPreferences.backgroundKey) ?? "") ?? .transparent }
+        set { defaults.set(newValue.rawValue, forKey: ExportLayoutPreferences.backgroundKey) }
+    }
+
     /// Write a JSON sidecar next to each file export. Off by default; owned by
     /// `ExportLayoutPreferences` (the `export.*` key namespace), forwarded here like the
     /// framing/metadata toggles above.
