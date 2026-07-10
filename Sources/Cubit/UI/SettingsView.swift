@@ -50,7 +50,7 @@ private struct GeneralSettingsTab: View {
                 Toggle("Launch at Login", isOn: $settings.launchAtLogin)
                 if let failure = settings.launchAtLoginFailure {
                     FailureNote(
-                        message: "Couldn’t change the login item. \(failure)",
+                        message: Text("Couldn’t change the login item. \(failure)"),
                         actionTitle: "Open Login Items Settings",
                         action: openLoginItemsSettings
                     )
@@ -85,9 +85,12 @@ private struct GeneralSettingsTab: View {
 }
 
 /// Inline, non-modal failure note: what went wrong, and the one button that fixes it.
+///
+/// Takes `Text`, not `String`: a `String` passed to `Text` opts out of localization entirely,
+/// which is the quietest way to lose a translation.
 private struct FailureNote: View {
-    let message: String
-    var actionTitle: String?
+    let message: Text
+    var actionTitle: LocalizedStringKey?
     var action: (() -> Void)?
 
     var body: some View {
@@ -96,7 +99,7 @@ private struct FailureNote: View {
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(message)
+                message
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -128,7 +131,7 @@ private struct ShortcutsSettingsTab: View {
 
                 if hotkeyManager.registrationFailed {
                     FailureNote(
-                        message: "macOS refused this shortcut — another app is probably already using it. Pick a different combination."
+                        message: Text("macOS refused this shortcut — another app is probably already using it. Pick a different combination.")
                     )
                 }
 
@@ -225,8 +228,9 @@ private struct AppearanceSettingsTab: View {
                 Picker("Label Text Size", selection: $settings.labelTextSize) {
                     ForEach(LabelTextSize.allCases, id: \.self) { size in
                         // "S"/"M"/"L" is a legible control and an unintelligible announcement.
-                        Text(size.displayName)
-                            .accessibilityLabel(size.accessibilityName)
+                        Text(verbatim: size.displayName)
+                            // The control shows "S/M/L"; VoiceOver says the word, translated.
+                            .accessibilityLabel(LocalizedStringKey(size.accessibilityName))
                             .tag(size)
                     }
                 }
@@ -239,7 +243,11 @@ private struct AppearanceSettingsTab: View {
     }
 
     private func percentString(_ value: Double) -> String {
-        "\(Int((value * 100).rounded())) percent"
+        localizedFormat(
+            "a11y.settings.percentValue", "%@ percent",
+            "Spoken value of a percentage slider; %@ is the number",
+            LocalizedNumber.count(Int((value * 100).rounded()), locale: .current)
+        )
     }
 }
 
@@ -253,9 +261,16 @@ private struct ExportSettingsTab: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Default save location")
-                        Text(settings.defaultExportFolderDisplayPath ?? "System Default")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        // A chosen path renders verbatim; the fallback is UI text and must translate.
+                        Group {
+                            if let path = settings.defaultExportFolderDisplayPath {
+                                Text(path)
+                            } else {
+                                Text("System Default")
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button("Choose…") { isChoosingFolder = true }

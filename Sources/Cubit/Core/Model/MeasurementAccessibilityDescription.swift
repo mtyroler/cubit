@@ -127,8 +127,10 @@ enum MeasurementAccessibilityDescription {
         return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.1f", value)
     }
 
-    /// "1 point", never "1 points". English needs only the two cases; a language with richer
-    /// plural rules needs a `.stringsdict`, which is why the key names are plural-ready.
+    /// "1 point", never "1 points". English and the four shipped translations need only one/other,
+    /// which the two keys below express. A language with richer plural rules — Russian, Polish,
+    /// Arabic — needs these promoted into `Localizable.stringsdict`, the way the count-based
+    /// toasts already are; a Swift-side `count == 1 ? :` cannot represent them.
     private static func spokenPoints(_ value: CGFloat, locale: Locale, bundle: Bundle) -> String {
         let whole = Int(value.rounded())
         if whole == 1 {

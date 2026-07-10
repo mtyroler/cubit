@@ -44,7 +44,11 @@ final class MeasurementAccessibilityElement: NSAccessibilityElement {
     }
 
     override func accessibilityHelp() -> String? {
-        "Press to select. Arrow keys move, Option-arrow resizes, Delete removes."
+        localized(
+            "a11y.measurement.help",
+            "Press to select. Arrow keys move, Option-arrow resizes, Delete removes.",
+            "Spoken hint for a measurement on the overlay"
+        )
     }
 
     override func isAccessibilityElement() -> Bool { true }

@@ -148,7 +148,9 @@ struct ExportMenuView: View {
         )
     }
 
-    private func metadataToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+    /// `LocalizedStringKey`, not `String`: `Text(someString)` renders verbatim and silently
+    /// skips the strings table, which is the quietest way to lose a translation.
+    private func metadataToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             Text(title)
                 .font(.system(size: 11))
@@ -156,7 +158,7 @@ struct ExportMenuView: View {
         .toggleStyle(.checkbox)
     }
 
-    private func row(action: @escaping () -> Void, symbol: String, title: String, hint: String) -> some View {
+    private func row(action: @escaping () -> Void, symbol: String, title: LocalizedStringKey, hint: String) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: symbol)

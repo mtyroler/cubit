@@ -717,7 +717,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         guard let session else { return }
         session.cycleMode()
         resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
-        AccessibilityAnnouncer.announce("Reference: \(session.resolved.descriptor)")
+        AccessibilityAnnouncer.announce(
+            localizedFormat("a11y.announce.reference", "Reference: %@", "Spoken when the reference frame changes",  session.resolved.descriptor)
+        )
         refresh()
     }
 
@@ -760,7 +762,11 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         // Captured before the undo — afterwards the manager has moved it to the redo stack.
         let actionName = session.undoActionName
         session.undo()
-        AccessibilityAnnouncer.announce(actionName.isEmpty ? "Undo" : "Undid \(actionName)")
+        AccessibilityAnnouncer.announce(
+            actionName.isEmpty
+                ? localized("a11y.announce.undo", "Undo", "Spoken when undoing with no known action name")
+                : localizedFormat("a11y.announce.undid", "Undid %@", "Spoken when undoing; %@ is e.g. 'Move Measurement'",  actionName)
+        )
         resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
         refresh()
     }
@@ -769,14 +775,20 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         guard let session, session.canRedo else { return }
         let actionName = session.redoActionName
         session.redo()
-        AccessibilityAnnouncer.announce(actionName.isEmpty ? "Redo" : "Redid \(actionName)")
+        AccessibilityAnnouncer.announce(
+            actionName.isEmpty
+                ? localized("a11y.announce.redo", "Redo", "Spoken when redoing with no known action name")
+                : localizedFormat("a11y.announce.redid", "Redid %@", "Spoken when redoing; %@ is e.g. 'Move Measurement'",  actionName)
+        )
         resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
         refresh()
     }
 
     private func duplicateSelected() {
         guard let session, let copy = session.duplicateSelected() else { return }
-        AccessibilityAnnouncer.announce("Duplicated \(MeasurementAccessibilityDescription.label(for: copy))")
+        AccessibilityAnnouncer.announce(
+            localizedFormat("a11y.announce.duplicated", "Duplicated %@", "Spoken after duplicating; %@ is the measurement's name",                             MeasurementAccessibilityDescription.label(for: copy))
+        )
         refresh()
     }
 
@@ -784,7 +796,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         guard let session else { return }
         let count = session.measurements.count
         guard session.clearAll() else { return }
-        AccessibilityAnnouncer.announce("Cleared \(count) measurement\(count == 1 ? "" : "s")")
+        AccessibilityAnnouncer.announce(
+            localizedCount("a11y.announce.cleared", "Cleared %d measurements", "Spoken after clearing; %d is how many", count: count)
+        )
         refresh()
     }
 
@@ -792,7 +806,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         guard let session, let selected = session.selectedMeasurement else { return }
         let description = MeasurementAccessibilityDescription.label(for: selected)
         session.deleteSelected()
-        AccessibilityAnnouncer.announce("Deleted \(description)")
+        AccessibilityAnnouncer.announce(
+            localizedFormat("a11y.announce.deleted", "Deleted %@", "Spoken after deleting; %@ is the measurement's name",  description)
+        )
         refresh()
     }
 
@@ -827,12 +843,12 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     private func measurementMenu(for id: UUID, session: MeasurementSession) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.addItem(item("Edit Label…", #selector(menuEditLabel)))
-        menu.addItem(item("Duplicate", #selector(menuDuplicate), key: "d", modifiers: .command))
-        menu.addItem(item("Delete", #selector(menuDelete), key: "\u{8}", modifiers: []))
+        menu.addItem(item(localized("menu.editLabel", "Edit Label…", "Contextual menu item"), #selector(menuEditLabel)))
+        menu.addItem(item(localized("menu.duplicate", "Duplicate", "Contextual menu item"), #selector(menuDuplicate), key: "d", modifiers: .command))
+        menu.addItem(item(localized("menu.delete", "Delete", "Contextual menu item"), #selector(menuDelete), key: "\u{8}", modifiers: []))
         menu.addItem(.separator())
 
-        let colorItem = NSMenuItem(title: "Color", action: nil, keyEquivalent: "")
+        let colorItem = NSMenuItem(title: localized("menu.color", "Color", "Contextual submenu of measurement colors"), action: nil, keyEquivalent: "")
         colorItem.submenu = colorMenu(selectedIndex: session.selectedMeasurement?.colorIndex)
         menu.addItem(colorItem)
 
@@ -853,29 +869,30 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             toolItem.state = session.tool == kind && !session.isDrawingCustom ? .on : .off
             menu.addItem(toolItem)
         }
-        menu.addItem(item("Custom Reference Frame", #selector(menuBeginCustomFrame), key: "c", modifiers: []))
+        menu.addItem(item(localized("menu.customFrame", "Custom Reference Frame", "Contextual menu item"), #selector(menuBeginCustomFrame), key: "c", modifiers: []))
 
         menu.addItem(.separator())
-        let clear = item("Clear All Measurements", #selector(menuClearAll))
+        let clear = item(localized("menu.clearAll", "Clear All Measurements", "Contextual menu item"), #selector(menuClearAll))
         clear.isEnabled = !session.measurements.isEmpty
         menu.addItem(clear)
-        menu.addItem(item("Done", #selector(menuDismiss), key: "\u{1b}", modifiers: []))
+        menu.addItem(item(localized("menu.done", "Done", "Contextual menu item that dismisses the overlay"), #selector(menuDismiss), key: "\u{1b}", modifiers: []))
         return menu
     }
 
     private func addHistoryItems(to menu: NSMenu, session: MeasurementSession) {
-        let undoItem = item(undoTitle("Undo", session.undoActionName), #selector(menuUndo), key: "z", modifiers: .command)
+        let undoItem = item(undoTitle(localized("menu.undo", "Undo", "Contextual menu item"), session.undoActionName), #selector(menuUndo), key: "z", modifiers: .command)
         undoItem.isEnabled = session.canUndo
         menu.addItem(undoItem)
 
-        let redoItem = item(undoTitle("Redo", session.redoActionName), #selector(menuRedo), key: "z", modifiers: [.command, .shift])
+        let redoItem = item(undoTitle(localized("menu.redo", "Redo", "Contextual menu item"), session.redoActionName), #selector(menuRedo), key: "z", modifiers: [.command, .shift])
         redoItem.isEnabled = session.canRedo
         menu.addItem(redoItem)
     }
 
     /// "Undo Move Measurement" when the manager knows the action, plain "Undo" when it doesn't.
     private func undoTitle(_ verb: String, _ actionName: String) -> String {
-        actionName.isEmpty ? verb : "\(verb) \(actionName)"
+        guard !actionName.isEmpty else { return verb }
+        return localizedFormat("menu.undoWithAction", "%1$@ %2$@", "e.g. 'Undo' + 'Move Measurement'",  verb, actionName)
     }
 
     private func colorMenu(selectedIndex: Int?) -> NSMenu {
@@ -911,9 +928,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
     private func toolMenuTitle(_ kind: MeasurementKind) -> String {
         switch kind {
-        case .rectangle: return "Rectangle Tool"
-        case .horizontal: return "Horizontal Tool"
-        case .vertical: return "Vertical Tool"
+        case .rectangle: return localized("menu.tool.rectangle", "Rectangle Tool", "Contextual menu item")
+        case .horizontal: return localized("menu.tool.horizontal", "Horizontal Tool", "Contextual menu item")
+        case .vertical: return localized("menu.tool.vertical", "Vertical Tool", "Contextual menu item")
         }
     }
 
@@ -961,10 +978,16 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     /// resize on each shape rather than treating the overlay as one opaque rectangle.
     override func accessibilityRole() -> NSAccessibility.Role? { .layoutArea }
     override func isAccessibilityElement() -> Bool { true }
-    override func accessibilityLabel() -> String? { "Measurement canvas" }
+    override func accessibilityLabel() -> String? {
+        localized("a11y.canvas.label", "Measurement canvas", "The overlay's drawing surface")
+    }
 
     override func accessibilityHelp() -> String? {
-        "Drag to draw a measurement. Right-click a measurement for actions."
+        localized(
+            "a11y.canvas.help",
+            "Drag to draw a measurement. Right-click a measurement for actions.",
+            "Spoken hint for the overlay's drawing surface"
+        )
     }
 
     /// The live reading while drawing, so a draft isn't silent. Committed shapes carry their own
@@ -1069,7 +1092,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         let pillFrame = labelPillFrame(for: measurement, converter: converter, display: display)
         let field = NSTextField(frame: pillFrame.insetBy(dx: -4, dy: -3))
         field.stringValue = measurement.label
-        field.placeholderString = "Label"
+        field.placeholderString = localized("overlay.labelField.placeholder", "Label", "Placeholder in the measurement label text field")
         field.font = .systemFont(ofSize: 12, weight: .medium)
         field.bezelStyle = .roundedBezel
         field.delegate = self
@@ -1323,7 +1346,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         if let added = session.commitDraft() {
             announceAdded(added, session: session)
         } else {
-            AccessibilityAnnouncer.announce("No measurement added")
+            AccessibilityAnnouncer.announce(localized("a11y.announce.notAdded", "No measurement added", "Spoken when a drag was too small to create a measurement"))
         }
         refresh()
     }

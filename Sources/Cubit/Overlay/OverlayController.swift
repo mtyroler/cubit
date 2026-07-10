@@ -175,8 +175,13 @@ final class OverlayController {
         for window in windows {
             (window.contentView as? OverlayCanvasView)?.refreshAfterHandoff()
         }
-        let plural = clamped.count == 1 ? "" : "s"
-        frontCanvas?.showToast("Restored \(clamped.count) measurement\(plural) — ⌘Z to clear")
+        frontCanvas?.showToast(
+            localizedCount(
+                "toast.restored", "Restored %d measurements — ⌘Z to clear",
+                "Shown when a dismissed session's measurements come back; %d is how many",
+                count: clamped.count
+            )
+        )
         updateAppState()
     }
 
@@ -378,11 +383,18 @@ final class OverlayController {
     }
 
     private static func handoffMessage(count: Int, note: String?) -> String {
-        let plural = count == 1 ? "" : "s"
         if let note, !note.isEmpty {
-            return "\(note) — \(count) proposed, adjust or ⌘E to export"
+            return localizedFormat(
+                "toast.handoff.withNote", "%1$@ — %2$@ proposed, adjust or ⌘E to export",
+                "Agent handoff toast carrying the agent's own note; %1$@ is the note, %2$@ the count",
+                note, LocalizedNumber.count(count, locale: .current)
+            )
         }
-        return "Agent proposed \(count) measurement\(plural) — adjust or ⌘E to export"
+        return localizedCount(
+            "toast.handoff", "Agent proposed %d measurements — adjust or ⌘E to export",
+            "Agent handoff toast; %d is how many measurements arrived",
+            count: count
+        )
     }
 
     // MARK: Export
@@ -458,7 +470,9 @@ final class OverlayController {
                 if settings.writeJSONSidecar {
                     Exporter.writeSidecar(export.sidecar, besideImageAt: url)
                 }
-                frontCanvas?.showToast("Saved to \(Exporter.abbreviatedPath(url))")
+                frontCanvas?.showToast(
+                    localizedFormat("toast.saved", "Saved to %@", "Export confirmation; %@ is a ~/-relative path", Exporter.abbreviatedPath(url))
+                )
             }
         }
     }
@@ -468,7 +482,7 @@ final class OverlayController {
         Task { @MainActor in
             guard let export = await currentExport() else { return }
             Exporter.copyToPasteboard(export.png)
-            frontCanvas?.showToast("Copied to clipboard")
+            frontCanvas?.showToast(localized("toast.copied", "Copied to clipboard", "Export-to-clipboard confirmation"))
         }
     }
 

@@ -204,11 +204,13 @@ struct ToolPillView: View {
         }
     }
 
+    /// Already-localized text, handed to `Text` as a plain `String` on purpose: the lookup
+    /// happens here rather than through `LocalizedStringKey`, because `.help` interpolates it.
     private var modeName: String {
         switch session.mode {
-        case .windowUnderCursor: return "Window"
-        case .screen: return "Screen"
-        case .custom: return "Custom"
+        case .windowUnderCursor: return localized("reference.mode.window", "Window", "Reference frame name in the tool pill")
+        case .screen: return localized("reference.mode.screen", "Screen", "Reference frame name in the tool pill")
+        case .custom: return localized("reference.mode.custom", "Custom", "Reference frame name in the tool pill")
         }
     }
 }
