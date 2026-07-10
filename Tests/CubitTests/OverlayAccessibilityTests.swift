@@ -100,7 +100,7 @@ final class OverlayAccessibilityTests: XCTestCase {
 
         XCTAssertEqual(element.accessibilityRole(), .layoutItem)
         XCTAssertTrue(element.isAccessibilityElement())
-        XCTAssertEqual(element.accessibilityLabel(), "Rectangle, yellow, hero")
+        XCTAssertEqual(element.accessibilityLabel(), "Rectangle, Yellow, hero")
         // 200×150 of the 900×600 screen reference.
         XCTAssertEqual(element.accessibilityValue() as? String, "5.6 percent of screen area, 200 points by 150 points")
     }

@@ -126,7 +126,9 @@ final class OverlayContextMenuTests: XCTestCase {
         let submenu = try XCTUnwrap(menu.items.first { $0.title == "Color" }?.submenu)
 
         XCTAssertEqual(submenu.items.count, Palette.colors.count)
-        XCTAssertEqual(submenu.items.map(\.title), Palette.colorNames.map { $0.capitalized })
+        // Display names, not the sidecar's stable slugs.
+        XCTAssertEqual(submenu.items.map(\.title), (0..<Palette.colors.count).map { Palette.displayName(forIndex: $0) })
+        XCTAssertEqual(submenu.items[1].title, "Sky Blue")
         XCTAssertEqual(submenu.items[3].state, .on, "the measurement's own color is checked")
         XCTAssertEqual(submenu.items[0].state, .off)
 

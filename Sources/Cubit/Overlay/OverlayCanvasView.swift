@@ -747,7 +747,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     /// change is otherwise entirely silent.
     private func announceColor() {
         guard let index = session?.currentColorIndex else { return }
-        AccessibilityAnnouncer.announce(Palette.name(forIndex: index).capitalized)
+        AccessibilityAnnouncer.announce(Palette.displayName(forIndex: index))
     }
 
     // MARK: History
@@ -882,7 +882,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         let menu = NSMenu()
         menu.autoenablesItems = false
         for index in Palette.colors.indices {
-            let entry = item(Palette.name(forIndex: index).capitalized, #selector(menuSetColor), key: "\(index + 1)", modifiers: [])
+            let entry = item(Palette.displayName(forIndex: index), #selector(menuSetColor), key: "\(index + 1)", modifiers: [])
             entry.tag = index
             entry.state = index == selectedIndex ? .on : .off
             entry.image = swatchImage(for: index)
@@ -896,7 +896,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     private func swatchImage(for index: Int) -> NSImage? {
         let configuration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
             .applying(NSImage.SymbolConfiguration(paletteColors: [Palette.color(forIndex: index).nsColor]))
-        let image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: Palette.name(forIndex: index))?
+        let image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: Palette.displayName(forIndex: index))?
             .withSymbolConfiguration(configuration)
         image?.isTemplate = false
         return image

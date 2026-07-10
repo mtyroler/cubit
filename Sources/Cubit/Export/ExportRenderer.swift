@@ -108,7 +108,8 @@ enum ExportRenderer {
         metadata: ExportMetadata = ExportMetadata(),
         markup: MarkupStyle = .default,
         windowImage: CGImage? = nil,
-        showTotals: Bool = false
+        showTotals: Bool = false,
+        strings: ExportStrings = .englishFixed
     ) -> CGImage? {
         guard let geo = geometry(
             reference: reference,
@@ -117,7 +118,7 @@ enum ExportRenderer {
             windowShadow: windowShadow,
             windowImage: windowImage
         ) else { return nil }
-        return renderCGImage(geometry: geo, measurements: measurements, reference: reference, scale: captured.scale, metadata: metadata, markup: markup, showTotals: showTotals)
+        return renderCGImage(geometry: geo, measurements: measurements, reference: reference, scale: captured.scale, metadata: metadata, markup: markup, showTotals: showTotals, strings: strings)
     }
 
     private static func renderCGImage(
@@ -127,7 +128,8 @@ enum ExportRenderer {
         scale: CGFloat,
         metadata: ExportMetadata,
         markup: MarkupStyle,
-        showTotals: Bool
+        showTotals: Bool,
+        strings: ExportStrings
     ) -> CGImage? {
         let request = buildRequest(
             measurements: measurements,
@@ -137,7 +139,8 @@ enum ExportRenderer {
             imageSize: geo.pointSize,
             metadata: metadata,
             markup: markup,
-            showTotals: showTotals
+            showTotals: showTotals,
+            strings: strings
         )
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
@@ -170,7 +173,8 @@ enum ExportRenderer {
         metadata: ExportMetadata = ExportMetadata(),
         markup: MarkupStyle = .default,
         windowImage: CGImage? = nil,
-        showTotals: Bool = false
+        showTotals: Bool = false,
+        strings: ExportStrings = .englishFixed
     ) -> Data? {
         guard let image = renderCGImage(
             measurements: measurements,
@@ -181,7 +185,8 @@ enum ExportRenderer {
             metadata: metadata,
             markup: markup,
             windowImage: windowImage,
-            showTotals: showTotals
+            showTotals: showTotals,
+            strings: strings
         ) else {
             return nil
         }
@@ -197,6 +202,10 @@ enum ExportRenderer {
     }
 
     /// Renders the PNG and builds the matching sidecar in one pass over the crop geometry.
+    ///
+    /// `strings` is the app's vocabulary, in the user's language. It defaults to the frozen
+    /// English of the agent contract so a caller that doesn't care can't accidentally pick up
+    /// the host's locale; `OverlayController` passes `.localized()`.
     static func renderExport(
         measurements: [Measurement],
         reference: ResolvedReference,
@@ -206,7 +215,8 @@ enum ExportRenderer {
         metadata: ExportMetadata = ExportMetadata(),
         markup: MarkupStyle = .default,
         windowImage: CGImage? = nil,
-        showTotals: Bool = false
+        showTotals: Bool = false,
+        strings: ExportStrings = .englishFixed
     ) -> RenderedExport? {
         guard let geo = geometry(
             reference: reference,
@@ -223,7 +233,8 @@ enum ExportRenderer {
             scale: captured.scale,
             metadata: metadata,
             markup: markup,
-            showTotals: showTotals
+            showTotals: showTotals,
+            strings: strings
         ), let png = pngData(from: image) else { return nil }
 
         let sidecar = self.sidecar(
@@ -268,7 +279,11 @@ enum ExportRenderer {
             scale: scale,
             metadata: ExportMetadata(),
             markup: markup,
-            showTotals: showTotals
+            showTotals: showTotals,
+            // Pinned, not a parameter: this is the `cubit annotate` / `annotate_screenshot`
+            // path, whose text and number formatting are an agent-facing contract. It must not
+            // vary with the host machine's language or region.
+            strings: .englishFixed
         ), let png = pngData(from: cg) else { return nil }
 
         let sidecar = self.sidecar(
@@ -346,15 +361,16 @@ enum ExportRenderer {
         imageSize: CGSize,
         metadata: ExportMetadata,
         markup: MarkupStyle,
-        showTotals: Bool
+        showTotals: Bool,
+        strings: ExportStrings
     ) -> LayoutRequest {
         var callouts: [CalloutInput] = []
         var rows: [LegendRowInput] = []
 
         for (index, measurement) in measurements.enumerated() {
             let metrics = MeasurementEngine.metrics(for: measurement, reference: reference.rect, scale: scale)
-            let primary = primaryText(metrics)
-            let detail = detailText(kind: measurement.kind, metrics: metrics)
+            let primary = primaryText(metrics, strings: strings)
+            let detail = detailText(kind: measurement.kind, metrics: metrics, strings: strings)
             let label = measurement.label.isEmpty ? nil : measurement.label
 
             callouts.append(CalloutInput(
@@ -368,7 +384,7 @@ enum ExportRenderer {
             ))
             rows.append(LegendRowInput(
                 colorIndex: measurement.colorIndex,
-                labelText: label ?? "Measurement \(index + 1)",
+                labelText: label ?? strings.untitledMeasurement(number: index + 1),
                 valueText: "\(primary)  ·  \(detail)"
             ))
         }
@@ -379,7 +395,7 @@ enum ExportRenderer {
         let legend = LegendInput(
             headerText: reference.descriptor,
             rows: rows,
-            totals: showTotals ? measurementTotals(measurements, reference: reference.rect, scale: scale) : [],
+            totals: showTotals ? measurementTotals(measurements, reference: reference.rect, scale: scale, strings: strings) : [],
             wordmark: hasFooter ? "" : "Cubit",
             metadataHeight: 0
         )
@@ -390,21 +406,21 @@ enum ExportRenderer {
             referenceMode: reference.mode,
             callouts: callouts,
             legend: legend,
-            metadataFooter: hasFooter ? metadataFooter(from: metadata) : nil,
+            metadataFooter: hasFooter ? metadataFooter(from: metadata, strings: strings) : nil,
             markup: markup
         )
     }
 
-    private static func metadataFooter(from metadata: ExportMetadata) -> MetadataFooterInput {
+    private static func metadataFooter(from metadata: ExportMetadata, strings: ExportStrings) -> MetadataFooterInput {
         var columns: [MetadataFooterColumnInput] = []
         if let machine = metadata.machine {
-            columns.append(MetadataFooterColumnInput(caption: "Machine", lines: machine.lines))
+            columns.append(MetadataFooterColumnInput(caption: strings.machineCaption, lines: machine.lines))
         }
         if let window = metadata.window {
-            columns.append(MetadataFooterColumnInput(caption: "Window", lines: window.lines))
+            columns.append(MetadataFooterColumnInput(caption: strings.windowCaption, lines: window.lines))
         }
         if let app = metadata.app {
-            columns.append(MetadataFooterColumnInput(caption: "App", lines: app.lines))
+            columns.append(MetadataFooterColumnInput(caption: strings.appCaption, lines: app.lines))
         }
         return MetadataFooterInput(columns: columns, wordmark: "Cubit")
     }
@@ -414,7 +430,7 @@ enum ExportRenderer {
     /// their area %, horizontal lines their combined width % and pixel length, vertical lines
     /// their combined height % and pixel length. Sums are arithmetic — overlapping shapes are
     /// counted more than once, matching "how much did I mark", not a de-duplicated union.
-    static func measurementTotals(_ measurements: [Measurement], reference: CanonicalRect, scale: CGFloat) -> [String] {
+    static func measurementTotals(_ measurements: [Measurement], reference: CanonicalRect, scale: CGFloat, strings: ExportStrings = .englishFixed) -> [String] {
         var rectPercent = 0.0, rectCount = 0
         var hPercent = 0.0, hLength: CGFloat = 0, hCount = 0
         var vPercent = 0.0, vLength: CGFloat = 0, vCount = 0
@@ -438,27 +454,27 @@ enum ExportRenderer {
 
         var lines: [String] = []
         if rectCount >= 2 {
-            lines.append(String(format: "Total area  ·  %.1f%%", rectPercent))
+            lines.append("\(strings.totalArea)  ·  \(strings.percent(rectPercent))")
         }
         if hCount >= 2 {
-            lines.append(String(format: "Total width  ·  %.1f%%  ·  %d px", hPercent, Int(hLength.rounded())))
+            lines.append("\(strings.totalWidth)  ·  \(strings.percent(hPercent))  ·  \(strings.pixelDimension(hLength))")
         }
         if vCount >= 2 {
-            lines.append(String(format: "Total height  ·  %.1f%%  ·  %d px", vPercent, Int(vLength.rounded())))
+            lines.append("\(strings.totalHeight)  ·  \(strings.percent(vPercent))  ·  \(strings.pixelDimension(vLength))")
         }
         return lines
     }
 
-    nonisolated static func primaryText(_ metrics: Metrics) -> String {
-        String(format: "%.1f%%", metrics.primaryPercent)
+    nonisolated static func primaryText(_ metrics: Metrics, strings: ExportStrings = .englishFixed) -> String {
+        strings.percent(metrics.primaryPercent)
     }
 
-    nonisolated static func detailText(kind: MeasurementKind, metrics: Metrics) -> String {
+    nonisolated static func detailText(kind: MeasurementKind, metrics: Metrics, strings: ExportStrings = .englishFixed) -> String {
         switch kind {
         case .rectangle:
-            return "\(Int(metrics.widthPx.rounded()))×\(Int(metrics.heightPx.rounded())) px"
+            return "\(strings.dimension(metrics.widthPx))×\(strings.pixelDimension(metrics.heightPx))"
         case .horizontal, .vertical:
-            return "\(Int(metrics.lengthPx.rounded())) px"
+            return strings.pixelDimension(metrics.lengthPx)
         }
     }
 

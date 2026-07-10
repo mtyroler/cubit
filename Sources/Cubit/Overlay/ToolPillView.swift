@@ -176,7 +176,7 @@ struct ToolPillView: View {
         .opacity(colorIndex == nil ? 0.35 : 1)
         .help("Color — X / 1–8")
         .accessibilityLabel("Color")
-        .accessibilityValue(colorIndex.map { Palette.name(forIndex: $0).capitalized } ?? "None")
+        .accessibilityValue(colorIndex.map { Palette.displayName(forIndex: $0) } ?? "None")
         .accessibilityHint("Cycles the color of the selected measurement")
     }
 

@@ -11,19 +11,19 @@ final class MeasurementAccessibilityDescriptionTests: XCTestCase {
     // MARK: label — identity, stable while dragging
 
     func testLabelNamesKindAndColor() {
-        XCTAssertEqual(MeasurementAccessibilityDescription.label(for: rectangle(width: 10, height: 10, colorIndex: 0)), "Rectangle, orange")
+        XCTAssertEqual(MeasurementAccessibilityDescription.label(for: rectangle(width: 10, height: 10, colorIndex: 0)), "Rectangle, Orange")
     }
 
     func testLabelIncludesUserLabelWhenPresent() {
         let measurement = rectangle(width: 10, height: 10, label: "hero", colorIndex: 1)
-        XCTAssertEqual(MeasurementAccessibilityDescription.label(for: measurement), "Rectangle, sky blue, hero")
+        XCTAssertEqual(MeasurementAccessibilityDescription.label(for: measurement), "Rectangle, Sky Blue, hero")
     }
 
     func testLabelNamesLineKinds() {
         let horizontal = Cubit.Measurement(kind: .horizontal, rect: CanonicalRect(x: 0, y: 0, width: 100, height: 0), colorIndex: 4)
         let vertical = Cubit.Measurement(kind: .vertical, rect: CanonicalRect(x: 0, y: 0, width: 0, height: 100), colorIndex: 4)
-        XCTAssertEqual(MeasurementAccessibilityDescription.label(for: horizontal), "Horizontal line, blue")
-        XCTAssertEqual(MeasurementAccessibilityDescription.label(for: vertical), "Vertical line, blue")
+        XCTAssertEqual(MeasurementAccessibilityDescription.label(for: horizontal), "Horizontal line, Blue")
+        XCTAssertEqual(MeasurementAccessibilityDescription.label(for: vertical), "Vertical line, Blue")
     }
 
     /// The label must not carry the measurement's size — VoiceOver re-reads the value on change
@@ -86,7 +86,7 @@ final class MeasurementAccessibilityDescriptionTests: XCTestCase {
             referenceMode: .windowUnderCursor,
             scale: 2
         )
-        XCTAssertEqual(announcement, "Added Rectangle, orange, hero. 10.0 percent of window area, 500 points by 200 points")
+        XCTAssertEqual(announcement, "Added Rectangle, Orange, hero. 10.0 percent of window area, 500 points by 200 points")
     }
 
     func testReferenceNounMatchesEachMode() {

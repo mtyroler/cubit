@@ -68,12 +68,12 @@ struct HUDView: View {
         }
     }
 
-    private func pt(_ value: CGFloat) -> Int {
-        Int(value.rounded())
+    private func pt(_ value: CGFloat) -> String {
+        LocalizedNumber.dimension(value, locale: .current)
     }
 
     private func pct(_ value: Double) -> String {
-        String(format: "%.1f%%", value)
+        LocalizedNumber.percent(value, locale: .current)
     }
 }
 

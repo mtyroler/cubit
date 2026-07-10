@@ -441,7 +441,9 @@ final class OverlayController {
             metadata: metadata,
             markup: markup,
             windowImage: windowImage,
-            showTotals: framing.showTotals
+            showTotals: framing.showTotals,
+            // The app's own export follows the user's language; the agent surfaces pin English.
+            strings: .localized()
         )
     }
 
@@ -482,7 +484,7 @@ final class OverlayController {
             appState.draftPercent = nil
             return
         }
-        appState.draftPercent = String(format: "%.1f%%", percent)
+        appState.draftPercent = LocalizedNumber.percent(percent, locale: .current)
     }
 
     /// Returns the outcome if the capture finishes before the timeout, otherwise nil.

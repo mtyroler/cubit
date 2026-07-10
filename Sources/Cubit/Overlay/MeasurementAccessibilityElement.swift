@@ -30,7 +30,7 @@ final class MeasurementAccessibilityElement: NSAccessibilityElement {
     }
 
     override func accessibilityLabel() -> String? {
-        measurement.map(MeasurementAccessibilityDescription.label(for:))
+        measurement.map { MeasurementAccessibilityDescription.label(for: $0) }
     }
 
     override func accessibilityValue() -> Any? {

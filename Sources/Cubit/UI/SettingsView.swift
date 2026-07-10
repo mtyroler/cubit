@@ -190,7 +190,7 @@ private struct AppearanceSettingsTab: View {
                 // anonymous images.
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Measurement palette")
-                .accessibilityValue(Palette.colorNames.joined(separator: ", "))
+                .accessibilityValue((0..<Palette.colors.count).map { Palette.displayName(forIndex: $0) }.joined(separator: ", "))
             }
 
             Section("Markup") {

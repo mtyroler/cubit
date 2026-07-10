@@ -66,8 +66,12 @@ enum Palette {
         PaletteColor(red: 0.600, green: 0.600, blue: 0.600)  // neutral gray
     ]
 
-    /// Stable, human-readable names paralleling `colors` (Okabe-Ito). Used by the JSON
-    /// sidecar so an agent can refer to a measurement's color by name, not just index.
+    /// STABLE SLUGS, never localized. Paralleling `colors` (Okabe-Ito). These are the agent
+    /// contract: the JSON sidecar, `cubit`, and `cubit-mcp` all refer to a measurement's color
+    /// by these exact strings, so translating them would silently break every consumer.
+    ///
+    /// For anything a person reads or hears — VoiceOver, the contextual menu, Settings — use
+    /// `displayName(forIndex:)` instead.
     static let colorNames: [String] = [
         "orange",
         "sky blue",
@@ -83,8 +87,43 @@ enum Palette {
         colors[index % colors.count]
     }
 
+    /// The stable slug. Contract surface — see `colorNames`.
     static func name(forIndex index: Int) -> String {
-        colorNames[((index % colorNames.count) + colorNames.count) % colorNames.count]
+        colorNames[normalizedIndex(index)]
+    }
+
+    /// English display wording, paralleling `colorNames`. Title Case because these appear as
+    /// menu items and control labels — NOT derived from the slugs by `.capitalized`, which
+    /// would be a locale-sensitive transform applied to strings that are already translated.
+    private static let englishDisplayNames: [String] = [
+        "Orange",
+        "Sky Blue",
+        "Bluish Green",
+        "Yellow",
+        "Blue",
+        "Vermillion",
+        "Reddish Purple",
+        "Gray"
+    ]
+
+    /// The name a person reads or hears, in their language: VoiceOver, the contextual menu,
+    /// Settings. Falls back to the English wording when no localization is present, which is
+    /// what the CLI and MCP binaries get — their bundles carry no strings table, so this is
+    /// English there by construction rather than by discipline.
+    static func displayName(forIndex index: Int, bundle: Bundle = .main) -> String {
+        let normalized = normalizedIndex(index)
+        let english = englishDisplayNames[normalized]
+        return NSLocalizedString(
+            "palette.color.\(colorNames[normalized].replacingOccurrences(of: " ", with: "_"))",
+            tableName: nil,
+            bundle: bundle,
+            value: english,
+            comment: "Name of a measurement color, spoken by VoiceOver and shown in the color menu"
+        )
+    }
+
+    private static func normalizedIndex(_ index: Int) -> Int {
+        ((index % colorNames.count) + colorNames.count) % colorNames.count
     }
 
     /// Wraps `index` one step forward or backward through the palette (index 0 follows the
