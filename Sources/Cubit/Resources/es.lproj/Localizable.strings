@@ -136,3 +136,12 @@
 "Export the area around the window instead of the window alone" = "Exportar el área alrededor de la ventana en lugar de solo la ventana";
 "Style window exports like a native macOS screenshot: rounded corners and a drop shadow" = "Dar a las exportaciones el estilo de una captura nativa de macOS: esquinas redondeadas y sombra";
 "Add a summed total per kind to the legend: rectangle area, horizontal width, vertical height" = "Añadir un total por tipo a la leyenda: área de rectángulos, anchura horizontal, altura vertical";
+"toast.renderFailed" = "No se pudo generar la exportación — inténtalo de nuevo";
+"Background" = "Fondo";
+"Save JSON sidecar" = "Guardar archivo JSON adjunto";
+"Click the shortcut field, then type a new combination. Esc cancels. Must include ⌘, ⌥, or ⌃." = "Haz clic en el campo del atajo y escribe una nueva combinación. Esc cancela. Debe incluir ⌘, ⌥ o ⌃.";
+"Cubit captures a frozen snapshot of your screen so your measurements stay put while you draw, and so you can export a marked-up image. Nothing leaves your Mac." = "Cubit toma una instantánea congelada de la pantalla para que tus mediciones no se muevan mientras dibujas y puedas exportar una imagen anotada. Nada sale de tu Mac.";
+"Imprints are off by default; nothing is collected unless enabled." = "Las impresiones están desactivadas por omisión; no se recopila nada si no las activas.";
+"The sidecar is a .json file saved next to the image with the measurement data for tools to parse." = "El archivo adjunto es un .json guardado junto a la imagen con los datos de medición para que otras herramientas los lean.";
+"macOS calls this “Screen & System Audio Recording.” Cubit takes still snapshots only — it never records audio." = "macOS lo llama «Grabación de pantalla y audio del sistema». Cubit solo toma instantáneas — nunca graba audio.";
+"macOS refused this shortcut — another app is probably already using it. Pick a different combination." = "macOS rechazó este atajo — probablemente otra app ya lo usa. Elige otra combinación.";

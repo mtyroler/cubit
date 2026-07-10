@@ -50,5 +50,21 @@
 			<string>%d mesures effacées</string>
 		</dict>
 	</dict>
+	<key>onboarding.handoffPrompt</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>L’agent propose 1 mesure. Autorisez l’accès pour la voir à l’écran.</string>
+			<key>other</key>
+			<string>L’agent propose %d mesures. Autorisez l’accès pour les voir à l’écran.</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

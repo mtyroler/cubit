@@ -294,8 +294,20 @@ private struct ExportSettingsTab: View {
             Section {
                 Toggle("Include surrounding context", isOn: $settings.includeContext)
                 Toggle("Window shadow", isOn: $settings.windowShadow)
+                Picker("Background", selection: $settings.exportBackground) {
+                    ForEach(ExportBackgroundStyle.allCases, id: \.self) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+                .disabled(!settings.windowShadow || settings.includeContext)
             } header: {
                 Text("Layout")
+            } footer: {
+                Text(settings.includeContext || !settings.windowShadow
+                    ? "Background is off: it needs a styled window export (window shadow on, surrounding context off)."
+                    : "The background fills the margins around styled window exports — a studio sweep, a gradient, or a classic Mac OS desktop. With a background on, the measurements panel moves below the window.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Machine name", isOn: $settings.imprintMachineName)

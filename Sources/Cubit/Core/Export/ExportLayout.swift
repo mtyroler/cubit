@@ -115,6 +115,15 @@ struct LegendRowInput: Sendable {
     var valueText: String
 }
 
+/// Where the legend card renders. `.overlay` pins it inside the image (bottom corner,
+/// avoiding content) — the only option when the margins are transparent. `.below` moves it
+/// out of the image entirely; the styled view stacks it under the window, so it stops
+/// occluding content. Only meaningful for styled exports over a non-transparent background.
+enum LegendPlacement: Sendable, Equatable {
+    case overlay
+    case below
+}
+
 struct LegendInput: Sendable {
     var headerText: String
     var rows: [LegendRowInput]
@@ -158,6 +167,7 @@ struct LayoutRequest: Sendable {
     var referenceMode: ReferenceMode
     var callouts: [CalloutInput]
     var legend: LegendInput
+    var legendPlacement: LegendPlacement
     var metadataFooter: MetadataFooterInput?
     var markup: MarkupStyle
 
@@ -168,6 +178,7 @@ struct LayoutRequest: Sendable {
         referenceMode: ReferenceMode,
         callouts: [CalloutInput],
         legend: LegendInput,
+        legendPlacement: LegendPlacement = .overlay,
         metadataFooter: MetadataFooterInput? = nil,
         markup: MarkupStyle = .default
     ) {
@@ -177,6 +188,7 @@ struct LayoutRequest: Sendable {
         self.referenceMode = referenceMode
         self.callouts = callouts
         self.legend = legend
+        self.legendPlacement = legendPlacement
         self.metadataFooter = metadataFooter
         self.markup = markup
     }
@@ -210,7 +222,10 @@ struct PlacedCallout: Sendable, Identifiable {
 }
 
 struct LegendGeometry: Sendable {
+    /// For `.overlay`: the card's position AND size in image space. For `.below`: origin is
+    /// zero and only the size is meaningful — the styled view stacks the card under the window.
     var frame: CGRect
+    var placement: LegendPlacement
     var headerText: String
     var rows: [LegendRowInput]
     var totals: [String]

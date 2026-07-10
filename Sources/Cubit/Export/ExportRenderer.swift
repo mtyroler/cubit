@@ -109,7 +109,8 @@ enum ExportRenderer {
         markup: MarkupStyle = .default,
         windowImage: CGImage? = nil,
         showTotals: Bool = false,
-        strings: ExportStrings = .englishFixed
+        strings: ExportStrings = .englishFixed,
+        background: ExportBackgroundStyle = .transparent
     ) -> CGImage? {
         guard let geo = geometry(
             reference: reference,
@@ -118,7 +119,7 @@ enum ExportRenderer {
             windowShadow: windowShadow,
             windowImage: windowImage
         ) else { return nil }
-        return renderCGImage(geometry: geo, measurements: measurements, reference: reference, scale: captured.scale, metadata: metadata, markup: markup, showTotals: showTotals, strings: strings)
+        return renderCGImage(geometry: geo, measurements: measurements, reference: reference, scale: captured.scale, metadata: metadata, markup: markup, showTotals: showTotals, strings: strings, background: background)
     }
 
     private static func renderCGImage(
@@ -129,8 +130,14 @@ enum ExportRenderer {
         metadata: ExportMetadata,
         markup: MarkupStyle,
         showTotals: Bool,
-        strings: ExportStrings
+        strings: ExportStrings,
+        background: ExportBackgroundStyle = .transparent
     ) -> CGImage? {
+        // Over a real background the legend moves below the window instead of covering
+        // content — but only when there are measurements to list; an empty legend stays
+        // in-image as the branding card. Transparent margins keep the overlay placement:
+        // a card floating in alpha would land on arbitrary backdrops.
+        let legendBelow = geo.styled && background != .transparent && !measurements.isEmpty
         let request = buildRequest(
             measurements: measurements,
             reference: reference,
@@ -140,12 +147,13 @@ enum ExportRenderer {
             metadata: metadata,
             markup: markup,
             showTotals: showTotals,
-            strings: strings
+            strings: strings,
+            legendPlacement: legendBelow ? .below : .overlay
         )
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
         if geo.styled {
-            let renderer = ImageRenderer(content: StyledWindowExportView(layout: layout, image: geo.image))
+            let renderer = ImageRenderer(content: StyledWindowExportView(layout: layout, image: geo.image, background: background))
             renderer.scale = scale
             renderer.isOpaque = geo.isOpaque
             return renderer.cgImage
@@ -174,7 +182,8 @@ enum ExportRenderer {
         markup: MarkupStyle = .default,
         windowImage: CGImage? = nil,
         showTotals: Bool = false,
-        strings: ExportStrings = .englishFixed
+        strings: ExportStrings = .englishFixed,
+        background: ExportBackgroundStyle = .transparent
     ) -> Data? {
         guard let image = renderCGImage(
             measurements: measurements,
@@ -186,7 +195,8 @@ enum ExportRenderer {
             markup: markup,
             windowImage: windowImage,
             showTotals: showTotals,
-            strings: strings
+            strings: strings,
+            background: background
         ) else {
             return nil
         }
@@ -216,7 +226,8 @@ enum ExportRenderer {
         markup: MarkupStyle = .default,
         windowImage: CGImage? = nil,
         showTotals: Bool = false,
-        strings: ExportStrings = .englishFixed
+        strings: ExportStrings = .englishFixed,
+        background: ExportBackgroundStyle = .transparent
     ) -> RenderedExport? {
         guard let geo = geometry(
             reference: reference,
@@ -234,7 +245,8 @@ enum ExportRenderer {
             metadata: metadata,
             markup: markup,
             showTotals: showTotals,
-            strings: strings
+            strings: strings,
+            background: background
         ), let png = pngData(from: image) else { return nil }
 
         let sidecar = self.sidecar(
@@ -362,7 +374,8 @@ enum ExportRenderer {
         metadata: ExportMetadata,
         markup: MarkupStyle,
         showTotals: Bool,
-        strings: ExportStrings
+        strings: ExportStrings,
+        legendPlacement: LegendPlacement = .overlay
     ) -> LayoutRequest {
         var callouts: [CalloutInput] = []
         var rows: [LegendRowInput] = []
@@ -406,6 +419,7 @@ enum ExportRenderer {
             referenceMode: reference.mode,
             callouts: callouts,
             legend: legend,
+            legendPlacement: legendPlacement,
             metadataFooter: hasFooter ? metadataFooter(from: metadata, strings: strings) : nil,
             markup: markup
         )

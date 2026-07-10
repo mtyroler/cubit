@@ -21,10 +21,26 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGNING_ALLOWED=YES
 
+      - name: Build the agent binaries (universal, ad-hoc signed)
+        run: |
+          swift build -c release --arch arm64 --arch x86_64
+          # The bin directory moved between toolchains (.build/apple/… → .build/out/…); ask.
+          BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+          echo "TOOLS_BIN=$BIN" >> "$GITHUB_ENV"
+          for tool in cubit cubit-mcp; do
+            codesign --force --sign - --timestamp=none "$BIN/$tool"
+            lipo -archs "$BIN/$tool"
+          done
+
       - name: Package
         run: |
           APP="build/Build/Products/Release/Cubit.app"
           ditto -c -k --keepParent "$APP" "Cubit-${GITHUB_REF_NAME}.zip"
+          # ditto -c -k takes ONE source, so stage both tools under a folder the zip preserves.
+          STAGE="stage/cubit-tools-${GITHUB_REF_NAME}"
+          mkdir -p "$STAGE"
+          cp "$TOOLS_BIN/cubit" "$TOOLS_BIN/cubit-mcp" "$STAGE/"
+          ditto -c -k --keepParent "$STAGE" "cubit-tools-${GITHUB_REF_NAME}.zip"
 
       - name: Create GitHub Release
         env:
@@ -32,5 +48,6 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             "Cubit-${GITHUB_REF_NAME}.zip" \
+            "cubit-tools-${GITHUB_REF_NAME}.zip" \
             --title "Cubit ${GITHUB_REF_NAME}" \
             --generate-notes

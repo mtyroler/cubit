@@ -27,25 +27,39 @@ enum WindowExportStyle {
 }
 
 /// A window export dressed to look like a native macOS window screenshot: the annotated
-/// window rounded, hairline-bordered and drop-shadowed inside transparent margins, with the
+/// window rounded, hairline-bordered and drop-shadowed inside the margins, with the
 /// metadata footer (when present) as its own floating card below. Annotations stay
 /// window-relative — the styling only frames the window, it never shifts the layout.
+/// The margins are transparent by default; a non-transparent `background` fills them
+/// (era styles add their menu bar as extra top inset and round the "screen" corners).
 struct StyledWindowExportView: View {
     let layout: ExportLayout
     let image: CGImage
+    var background: ExportBackgroundStyle = .transparent
 
     var body: some View {
+        let barHeight = ExportBackgroundChrome.menuBarHeight(style: background, imageSize: layout.imageSize)
         VStack(spacing: WindowExportStyle.footerGap) {
             windowCard
+            // A below-placed legend stacks under the window like the footer card, sized by
+            // the same engine measurement the in-image card would have used.
+            if layout.legend.placement == .below {
+                LegendCard(legend: layout.legend)
+                    .frame(width: layout.legend.frame.width, height: layout.legend.frame.height)
+            }
             if let footer = layout.footer {
                 MetadataFooterCard(footer: footer)
             }
         }
         .padding(EdgeInsets(
-            top: WindowExportStyle.topMargin,
+            top: WindowExportStyle.topMargin + barHeight,
             leading: WindowExportStyle.sideMargin,
             bottom: WindowExportStyle.bottomMargin,
             trailing: WindowExportStyle.sideMargin
+        ))
+        .background(ExportBackgroundView(style: background, imageSize: layout.imageSize))
+        .clipShape(UnevenRoundedRectangle(
+            cornerRadii: ExportBackgroundChrome.cornerRadii(style: background, imageSize: layout.imageSize)
         ))
         .fixedSize()
     }

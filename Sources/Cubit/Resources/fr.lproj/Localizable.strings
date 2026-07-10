@@ -136,3 +136,12 @@
 "Export the area around the window instead of the window alone" = "Exporter la zone autour de la fenêtre plutôt que la fenêtre seule";
 "Style window exports like a native macOS screenshot: rounded corners and a drop shadow" = "Styliser les exports de fenêtre comme une capture macOS native : coins arrondis et ombre portée";
 "Add a summed total per kind to the legend: rectangle area, horizontal width, vertical height" = "Ajouter un total par type à la légende : surface des rectangles, largeur horizontale, hauteur verticale";
+"toast.renderFailed" = "Impossible de générer l’export — réessayez";
+"Background" = "Arrière-plan";
+"Save JSON sidecar" = "Enregistrer le fichier JSON associé";
+"Click the shortcut field, then type a new combination. Esc cancels. Must include ⌘, ⌥, or ⌃." = "Cliquez sur le champ du raccourci, puis tapez une nouvelle combinaison. Échap annule. Doit inclure ⌘, ⌥ ou ⌃.";
+"Cubit captures a frozen snapshot of your screen so your measurements stay put while you draw, and so you can export a marked-up image. Nothing leaves your Mac." = "Cubit fige une capture de votre écran afin que vos mesures restent en place pendant que vous dessinez et que vous puissiez exporter une image annotée. Rien ne quitte votre Mac.";
+"Imprints are off by default; nothing is collected unless enabled." = "Les empreintes sont désactivées par défaut ; rien n’est collecté sans activation.";
+"The sidecar is a .json file saved next to the image with the measurement data for tools to parse." = "Le fichier associé est un .json enregistré à côté de l’image, contenant les données de mesure pour les outils.";
+"macOS calls this “Screen & System Audio Recording.” Cubit takes still snapshots only — it never records audio." = "macOS appelle cela « Enregistrement de l’écran et de l’audio système ». Cubit ne prend que des captures fixes — jamais d’audio.";
+"macOS refused this shortcut — another app is probably already using it. Pick a different combination." = "macOS a refusé ce raccourci — une autre app l’utilise sans doute déjà. Choisissez une autre combinaison.";

@@ -50,5 +50,21 @@
 			<string>%d Messungen gelöscht</string>
 		</dict>
 	</dict>
+	<key>onboarding.handoffPrompt</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>Ein Agent hat 1 Messung vorgeschlagen. Erlaube den Zugriff, um sie auf dem Bildschirm zu sehen.</string>
+			<key>other</key>
+			<string>Ein Agent hat %d Messungen vorgeschlagen. Erlaube den Zugriff, um sie auf dem Bildschirm zu sehen.</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

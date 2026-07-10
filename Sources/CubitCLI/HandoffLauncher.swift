@@ -1,6 +1,25 @@
 import AppKit
 import Foundation
 
+/// The outcome an agent can actually be told about after triggering a handoff.
+///
+/// Opening a `cubit://` URL is FIRE-AND-FORGET: macOS hands the URL to the app and returns. The
+/// app may then present the overlay — or show its Screen Recording permission gate first, or be
+/// mid-launch, or have the user dismiss it. None of that comes back across the process boundary.
+/// So the result says `delivered`, never `displayed`, and the note spells out the difference. An
+/// agent that reports "I put measurements on your screen" is guessing; one that reports "I sent
+/// them" is telling the truth.
+enum HandoffStatus: String {
+    case delivered
+
+    static let deliveredNote = """
+    The handoff was delivered to the Cubit app. This does not confirm the overlay is on screen: \
+    if Cubit lacks Screen Recording permission it shows its permission gate first, and the \
+    proposal is discarded if the user dismisses it or does not grant access within \
+    2 minutes. Ask the user what they see.
+    """
+}
+
 /// Triggers the live-overlay handoff (v0.3 M4): validates a handoff document and opens a
 /// `cubit://show?path=…` URL so the Cubit app presents the overlay and injects the proposed
 /// measurements as editable shapes. Shared by the `cubit show` command and the `cubit-mcp`

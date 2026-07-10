@@ -40,8 +40,9 @@ final class OverlayController {
     /// handoff into reachable bounds. Set when the overlay presents, cleared on dismiss.
     private var canonicalScreenRects: [CanonicalRect] = []
     /// A handoff that arrived while the overlay wasn't presented yet — injected once
-    /// `presentOverlay()` has built the session and windows.
-    private var pendingHandoff: (measurements: [Measurement], note: String?)?
+    /// `presentOverlay()` has built the session and windows, and only while it's still fresh.
+    /// Discarded when the user dismisses the permission gate. See `PendingHandoff`.
+    private var pendingHandoff: PendingHandoff?
 
     /// Snapshots captured at overlay entry, held until dismiss. M6's exporter consumes these.
     private(set) var capturedDisplays: [CapturedDisplay] = []
@@ -87,6 +88,11 @@ final class OverlayController {
             self?.continuedWithout = true
             self?.present()
         }
+        // Closing the gate is a refusal, not a deferral: drop any queued agent proposal so it can
+        // never surface later over unrelated content.
+        onboarding.onDismiss = { [weak self] in self?.pendingHandoff = nil }
+        // Tell the user WHY the gate appeared when an agent, not the hotkey, triggered it.
+        onboarding.pendingHandoffCount = pendingHandoff?.measurements.count
         self.onboarding = onboarding
         onboarding.show()
     }
@@ -128,6 +134,13 @@ final class OverlayController {
         let service = captureService
         let captureTask = Task { await service.captureAll(requests) }
 
+        // Freeze the WINDOW STACK next to the pixels. The overlay measures a photograph, so
+        // "the window under the cursor" must mean the window that was there when the shutter
+        // fired. Resolving against the live list lets a ⌘Tab mid-session silently re-point the
+        // reference at a window that isn't in the frozen image — the overlay keeps showing the
+        // old scene while the percentages, and any export, describe a different window.
+        let frozenWindows = FrozenWindowInfoProvider(snapshot: CGWindowInfoProvider().windows())
+
         // Race the capture against a short timeout so a fast snapshot freezes the scene
         // immediately, while a slow one never delays the overlay appearing.
         let early = await Self.raceValue(of: captureTask, timeoutMillis: 300)
@@ -140,15 +153,24 @@ final class OverlayController {
             descriptors: descriptors,
             converter: converter,
             session: session,
-            captured: earlyDisplays
+            captured: earlyDisplays,
+            provider: frozenWindows
         )
         orderWindowsFront()
         restoreMeasurementsIfNeeded(into: session)
 
-        // A handoff queued before the overlay existed injects now that the session and windows do.
+        // A handoff queued before the overlay existed injects now that the session and windows do —
+        // but only if the agent asked recently. This overlay may have been opened by the user's
+        // hotkey long afterwards, over unrelated content, with no agent involved.
         if let pending = pendingHandoff {
             pendingHandoff = nil
-            injectHandoff(pending.measurements, note: pending.note)
+            if pending.isFresh(now: Date()) {
+                injectHandoff(pending.measurements, note: pending.note)
+            } else {
+                FileHandle.standardError.write(Data(
+                    "Cubit: discarding a stale agent handoff (older than \(Int(PendingHandoff.maxAge))s)\n".utf8
+                ))
+            }
         }
 
         // Capture didn't beat the timeout — swap the frozen background in when it lands.
@@ -190,10 +212,10 @@ final class OverlayController {
         descriptors: [DisplayDescriptor],
         converter: CoordinateConverter,
         session: MeasurementSession,
-        captured: [CapturedDisplay]
+        captured: [CapturedDisplay],
+        provider: some WindowInfoProviding
     ) {
         let screenRects = descriptors.map(converter.canonicalFrame(of:))
-        let provider = CGWindowInfoProvider()
         let excludedPID = getpid()
 
         for (screen, descriptor) in zip(screens, descriptors) {
@@ -361,7 +383,7 @@ final class OverlayController {
         if session != nil {
             injectHandoff(proposed, note: note)
         } else {
-            pendingHandoff = (proposed, note)
+            pendingHandoff = PendingHandoff(measurements: proposed, note: note, queuedAt: Date())
             present()
         }
     }
@@ -417,7 +439,14 @@ final class OverlayController {
         pendingFraming ?? layoutPreferences.framing
     }
 
-    private func currentExport() async -> ExportRenderer.RenderedExport? {
+    /// The rendered export plus the framing it was rendered under, so save/copy can honor
+    /// per-export options that act outside the image (e.g. the JSON sidecar).
+    private struct FramedExport {
+        let rendered: ExportRenderer.RenderedExport
+        let framing: ExportFraming
+    }
+
+    private func currentExport() async -> FramedExport? {
         guard let session,
               let captured = ExportRenderer.captured(for: session.resolved, in: capturedDisplays) else { return nil }
         let reference = session.resolved
@@ -444,7 +473,7 @@ final class OverlayController {
             fillOpacity: CGFloat(settings.measurementFillOpacity),
             labelPointSize: CGFloat(settings.labelTextSize.pointSize)
         )
-        return ExportRenderer.renderExport(
+        guard let rendered = ExportRenderer.renderExport(
             measurements: session.measurements,
             reference: reference,
             captured: captured,
@@ -455,20 +484,31 @@ final class OverlayController {
             windowImage: windowImage,
             showTotals: framing.showTotals,
             // The app's own export follows the user's language; the agent surfaces pin English.
-            strings: .localized()
-        )
+            strings: .localized(),
+            background: framing.background
+        ) else { return nil }
+        return FramedExport(rendered: rendered, framing: framing)
+    }
+
+    /// Surfaced by both ⌘S and ⌘C when the renderer returns nothing. A separate failure from
+    /// `Exporter.saveToFile`'s write alert: this one is "we never produced an image".
+    private static var renderFailureMessage: String {
+        localized("toast.renderFailed", "Couldn't render the export — try again", "Shown when the export image could not be rendered")
     }
 
     func exportSave() {
         guard canExport else { showOnboarding(); return }
         Task { @MainActor in
-            guard let export = await currentExport() else { return }
+            guard let export = await currentExport() else {
+                frontCanvas?.showToast(Self.renderFailureMessage)
+                return
+            }
             let directoryURL = Exporter.resolvedSaveDirectory(forPath: settings.defaultExportFolderPath)
-            if let url = Exporter.saveToFile(export.png, above: windows as [NSWindow], directoryURL: directoryURL) {
+            if let url = Exporter.saveToFile(export.rendered.png, above: windows as [NSWindow], directoryURL: directoryURL) {
                 // The sidecar rides alongside a file save only, and never blocks the image:
                 // a failure to write it is swallowed inside `writeSidecar`.
-                if settings.writeJSONSidecar {
-                    Exporter.writeSidecar(export.sidecar, besideImageAt: url)
+                if export.framing.writeJSONSidecar {
+                    Exporter.writeSidecar(export.rendered.sidecar, besideImageAt: url)
                 }
                 frontCanvas?.showToast(
                     localizedFormat("toast.saved", "Saved to %@", "Export confirmation; %@ is a ~/-relative path", Exporter.abbreviatedPath(url))
@@ -480,8 +520,11 @@ final class OverlayController {
     func exportCopy() {
         guard canExport else { showOnboarding(); return }
         Task { @MainActor in
-            guard let export = await currentExport() else { return }
-            Exporter.copyToPasteboard(export.png)
+            guard let export = await currentExport() else {
+                frontCanvas?.showToast(Self.renderFailureMessage)
+                return
+            }
+            Exporter.copyToPasteboard(export.rendered.png)
             frontCanvas?.showToast(localized("toast.copied", "Copied to clipboard", "Export-to-clipboard confirmation"))
         }
     }
@@ -489,7 +532,7 @@ final class OverlayController {
     private func exportDragProvider() -> NSItemProvider? {
         guard canExport else { return nil }
         return Exporter.dragItemProvider { [weak self] in
-            await self?.currentExport()?.png
+            await self?.currentExport()?.rendered.png
         }
     }
 

@@ -50,5 +50,21 @@
 			<string>%d mediciones borradas</string>
 		</dict>
 	</dict>
+	<key>onboarding.handoffPrompt</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>Un agente propuso 1 medición. Concede acceso para verla en pantalla.</string>
+			<key>other</key>
+			<string>Un agente propuso %d mediciones. Concede acceso para verlas en pantalla.</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

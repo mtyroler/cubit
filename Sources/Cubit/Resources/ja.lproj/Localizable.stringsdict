@@ -44,5 +44,19 @@
 			<string>%d 件の計測を消去しました</string>
 		</dict>
 	</dict>
+	<key>onboarding.handoffPrompt</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>other</key>
+			<string>エージェントが %d 件の計測を提案しました。画面に表示するにはアクセスを許可してください。</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

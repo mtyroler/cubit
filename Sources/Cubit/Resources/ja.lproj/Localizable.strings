@@ -136,3 +136,12 @@
 "Export the area around the window instead of the window alone" = "ウインドウ単体ではなく、その周囲の領域も書き出します";
 "Style window exports like a native macOS screenshot: rounded corners and a drop shadow" = "ウインドウの書き出しをmacOS標準のスクリーンショット風にします（角丸と影）";
 "Add a summed total per kind to the legend: rectangle area, horizontal width, vertical height" = "凡例に種類ごとの合計を追加します（長方形の面積、水平の幅、垂直の高さ）";
+"toast.renderFailed" = "書き出しを生成できませんでした — もう一度お試しください";
+"Background" = "背景";
+"Save JSON sidecar" = "JSONサイドカーを保存";
+"Click the shortcut field, then type a new combination. Esc cancels. Must include ⌘, ⌥, or ⌃." = "ショートカット欄をクリックし、新しい組み合わせを入力します。Escで取り消します。⌘、⌥、⌃のいずれかが必要です。";
+"Cubit captures a frozen snapshot of your screen so your measurements stay put while you draw, and so you can export a marked-up image. Nothing leaves your Mac." = "Cubitは画面の静止スナップショットを取得します。描画中も計測がずれず、注釈付きの画像を書き出せます。データがMacの外に出ることはありません。";
+"Imprints are off by default; nothing is collected unless enabled." = "刻印はデフォルトでオフです。有効にしない限り、何も収集されません。";
+"The sidecar is a .json file saved next to the image with the measurement data for tools to parse." = "サイドカーは、画像の隣に保存される .json ファイルで、ツールが解析できる計測データが含まれます。";
+"macOS calls this “Screen & System Audio Recording.” Cubit takes still snapshots only — it never records audio." = "macOSではこれを「画面とシステムオーディオの収録」と呼びます。Cubitは静止画のみを取得し、音声は決して録音しません。";
+"macOS refused this shortcut — another app is probably already using it. Pick a different combination." = "macOSがこのショートカットを拒否しました。別のAppが既に使用している可能性があります。別の組み合わせを選んでください。";

@@ -136,3 +136,12 @@
 "Export the area around the window instead of the window alone" = "Den Bereich um das Fenster statt nur das Fenster exportieren";
 "Style window exports like a native macOS screenshot: rounded corners and a drop shadow" = "Fensterexporte wie native macOS-Screenshots gestalten: abgerundete Ecken und Schlagschatten";
 "Add a summed total per kind to the legend: rectangle area, horizontal width, vertical height" = "Der Legende eine Summe je Art hinzufügen: Rechteckfläche, horizontale Breite, vertikale Höhe";
+"toast.renderFailed" = "Export konnte nicht gerendert werden — bitte erneut versuchen";
+"Background" = "Hintergrund";
+"Save JSON sidecar" = "JSON-Begleitdatei sichern";
+"Click the shortcut field, then type a new combination. Esc cancels. Must include ⌘, ⌥, or ⌃." = "Klicke auf das Kurzbefehlfeld und gib eine neue Kombination ein. Esc bricht ab. Muss ⌘, ⌥ oder ⌃ enthalten.";
+"Cubit captures a frozen snapshot of your screen so your measurements stay put while you draw, and so you can export a marked-up image. Nothing leaves your Mac." = "Cubit erstellt eine eingefrorene Aufnahme deines Bildschirms, damit deine Messungen beim Zeichnen an Ort und Stelle bleiben und du ein annotiertes Bild exportieren kannst. Nichts verlässt deinen Mac.";
+"Imprints are off by default; nothing is collected unless enabled." = "Prägungen sind standardmäßig deaktiviert; ohne Aktivierung wird nichts erfasst.";
+"The sidecar is a .json file saved next to the image with the measurement data for tools to parse." = "Die Begleitdatei ist eine .json-Datei neben dem Bild mit den Messdaten, die Werkzeuge auslesen können.";
+"macOS calls this “Screen & System Audio Recording.” Cubit takes still snapshots only — it never records audio." = "macOS nennt dies „Bildschirm- & Systemaudioaufnahme“. Cubit erstellt nur Standbilder — Audio wird nie aufgezeichnet.";
+"macOS refused this shortcut — another app is probably already using it. Pick a different combination." = "macOS hat diesen Kurzbefehl abgelehnt — wahrscheinlich verwendet ihn bereits eine andere App. Wähle eine andere Kombination.";
