@@ -144,6 +144,12 @@ enum Help {
       The proposed measurements appear on your REAL screen as editable shapes — drag, resize,
       relabel, then ⌘E to export. Presenting the overlay steals focus and draws on screen (it
       is user-initiated tooling). This opens a cubit:// URL; the Cubit app must be installed.
-      Prints {opened,measurementCount} as JSON on success.
+      Prints {opened,measurementCount,status,note} as JSON.
+
+      Exit 0 and status "delivered" mean the handoff reached the app — NOT that the overlay is
+      on screen. Opening a URL is fire-and-forget: if Cubit lacks Screen Recording it shows a
+      permission gate first, and the proposal is dropped if the user dismisses that gate or does
+      not grant access within 2 minutes. There is no way to confirm display from here; ask the
+      user what they see rather than claiming the measurements are up.
     """
 }

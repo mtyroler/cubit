@@ -23,8 +23,9 @@ final class OverlayController {
     /// handoff into reachable bounds. Set when the overlay presents, cleared on dismiss.
     private var canonicalScreenRects: [CanonicalRect] = []
     /// A handoff that arrived while the overlay wasn't presented yet — injected once
-    /// `presentOverlay()` has built the session and windows.
-    private var pendingHandoff: (measurements: [Measurement], note: String?)?
+    /// `presentOverlay()` has built the session and windows, and only while it's still fresh.
+    /// Discarded when the user dismisses the permission gate. See `PendingHandoff`.
+    private var pendingHandoff: PendingHandoff?
 
     /// Snapshots captured at overlay entry, held until dismiss. M6's exporter consumes these.
     private(set) var capturedDisplays: [CapturedDisplay] = []
@@ -67,6 +68,11 @@ final class OverlayController {
             self?.continuedWithout = true
             self?.present()
         }
+        // Closing the gate is a refusal, not a deferral: drop any queued agent proposal so it can
+        // never surface later over unrelated content.
+        onboarding.onDismiss = { [weak self] in self?.pendingHandoff = nil }
+        // Tell the user WHY the gate appeared when an agent, not the hotkey, triggered it.
+        onboarding.pendingHandoffCount = pendingHandoff?.measurements.count
         self.onboarding = onboarding
         onboarding.show()
     }
@@ -124,10 +130,18 @@ final class OverlayController {
         )
         orderWindowsFront()
 
-        // A handoff queued before the overlay existed injects now that the session and windows do.
+        // A handoff queued before the overlay existed injects now that the session and windows do —
+        // but only if the agent asked recently. This overlay may have been opened by the user's
+        // hotkey long afterwards, over unrelated content, with no agent involved.
         if let pending = pendingHandoff {
             pendingHandoff = nil
-            injectHandoff(pending.measurements, note: pending.note)
+            if pending.isFresh(now: Date()) {
+                injectHandoff(pending.measurements, note: pending.note)
+            } else {
+                FileHandle.standardError.write(Data(
+                    "Cubit: discarding a stale agent handoff (older than \(Int(PendingHandoff.maxAge))s)\n".utf8
+                ))
+            }
         }
 
         // Capture didn't beat the timeout — swap the frozen background in when it lands.
@@ -253,7 +267,7 @@ final class OverlayController {
         if isPresented {
             injectHandoff(proposed, note: note)
         } else {
-            pendingHandoff = (proposed, note)
+            pendingHandoff = PendingHandoff(measurements: proposed, note: note, queuedAt: Date())
             present()
         }
     }

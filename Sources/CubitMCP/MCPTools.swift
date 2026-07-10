@@ -49,7 +49,11 @@ enum MCPTools {
             canonical points (top-left origin, y-down), the same space list_windows reports — so \
             propose measurements straight from those frames with no remapping. Presents the \
             overlay (stealing focus) and is user-adjustable; it never captures or exports on its \
-            own. Requires the Cubit app to be installed. Up to 200 measurements.
+            own. Requires the Cubit app to be installed. Up to 200 measurements. IMPORTANT: a \
+            successful result means the proposal was DELIVERED to the app, not that the user can \
+            see it — Cubit shows a permission gate first if it lacks Screen Recording, and drops \
+            the proposal if the user dismisses that gate. Do not tell the user measurements are on \
+            their screen; ask them what they see.
             """,
             inputSchema: schema(Schemas.showOverlay)
         ),
@@ -264,7 +268,9 @@ enum MCPTools {
         let doc = ShowOverlayResultDoc(
             opened: result.path,
             measurementCount: result.count,
-            note: document.note
+            note: document.note,
+            status: HandoffStatus.delivered.rawValue,
+            statusNote: HandoffStatus.deliveredNote
         )
         return .ok([.text(try prettyJSON(doc))])
     }
@@ -580,7 +586,11 @@ struct ShowOverlayResultDoc: Encodable {
     /// The staged temp file the app reads (its own JSON document).
     let opened: String
     let measurementCount: Int
+    /// The agent's own note, echoed back.
     let note: String?
+    /// Always `delivered` — the overlay's appearance cannot be confirmed. See `HandoffStatus`.
+    let status: String
+    let statusNote: String
 }
 
 struct AnnotateResultDoc: Encodable {

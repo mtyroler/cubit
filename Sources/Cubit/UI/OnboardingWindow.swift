@@ -5,9 +5,21 @@ import SwiftUI
 final class OnboardingWindow {
     private var window: NSWindow?
     private let permissions: PermissionsManager
+    private var model: OnboardingModel?
+    private var closeObserver: WindowCloseObserver?
+    /// Set while `close()` is tearing the window down as part of granting or continuing-without, so
+    /// the window-close notification isn't mistaken for the user dismissing the gate.
+    private var isFinishing = false
 
     var onGranted: (() -> Void)?
     var onContinueWithout: (() -> Void)?
+    /// The user closed the gate without granting and without continuing — a refusal.
+    var onDismiss: (() -> Void)?
+
+    /// How many measurements an agent is waiting to show, if the gate was triggered by a handoff.
+    var pendingHandoffCount: Int? {
+        didSet { model?.pendingHandoffCount = pendingHandoffCount }
+    }
 
     init(permissions: PermissionsManager) {
         self.permissions = permissions
@@ -17,12 +29,14 @@ final class OnboardingWindow {
 
     func show() {
         if let window {
+            model?.pendingHandoffCount = pendingHandoffCount
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
         let model = OnboardingModel(permissions: permissions)
+        model.pendingHandoffCount = pendingHandoffCount
         model.onGranted = { [weak self] in
             self?.close()
             self?.onGranted?()
@@ -31,6 +45,7 @@ final class OnboardingWindow {
             self?.close()
             self?.onContinueWithout?()
         }
+        self.model = model
 
         let hosting = NSHostingController(rootView: OnboardingView(model: model))
         let window = NSWindow(contentViewController: hosting)
@@ -44,18 +59,50 @@ final class OnboardingWindow {
         // onboarding window would sit on top of — and hide — the very prompt it triggers.
         // App activation below already brings this window forward on launch.
         window.level = .normal
-        window.setContentSize(NSSize(width: 420, height: 360))
+        window.setContentSize(NSSize(width: 420, height: 470))
         window.center()
         window.isReleasedWhenClosed = false
         self.window = window
+
+        // The window is `.closable`: clicking its close button must be treated as a refusal, not a
+        // silent deferral. Without this, a proposal queued behind the gate stays queued and injects
+        // at the NEXT overlay open — possibly hours later, over unrelated content.
+        closeObserver = WindowCloseObserver(window: window) { [weak self] in
+            guard let self, !self.isFinishing else { return }
+            self.window = nil
+            self.model = nil
+            self.onDismiss?()
+        }
 
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func close() {
+        isFinishing = true
+        defer { isFinishing = false }
         window?.orderOut(nil)
         window = nil
+        model = nil
+        closeObserver = nil
+    }
+}
+
+/// Reports the window's close button back to `OnboardingWindow`. A separate `NSObject` because
+/// `NSWindow.delegate` requires one, and because `NSWindow.delegate` is a weak reference the owner
+/// must hold this strongly.
+@MainActor
+private final class WindowCloseObserver: NSObject, NSWindowDelegate {
+    private let onClose: () -> Void
+
+    init(window: NSWindow, onClose: @escaping () -> Void) {
+        self.onClose = onClose
+        super.init()
+        window.delegate = self
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onClose()
     }
 }
 
@@ -64,6 +111,8 @@ final class OnboardingWindow {
 final class OnboardingModel {
     private let permissions: PermissionsManager
     var needsRelaunch = false
+    /// Non-nil when an agent's handoff is what triggered this gate.
+    var pendingHandoffCount: Int?
 
     var onGranted: (() -> Void)?
     var onContinueWithout: (() -> Void)?
@@ -109,6 +158,12 @@ final class OnboardingModel {
 struct OnboardingView: View {
     @Bindable var model: OnboardingModel
 
+    static func handoffPrompt(count: Int) -> String {
+        let noun = count == 1 ? "1 measurement" : "\(count) measurements"
+        let pronoun = count == 1 ? "it" : "them"
+        return "An agent proposed \(noun). Grant access to see \(pronoun) on screen."
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             Image(nsImage: model.appIcon)
@@ -118,9 +173,28 @@ struct OnboardingView: View {
             Text("Cubit needs Screen Recording")
                 .font(.headline)
 
+            if let count = model.pendingHandoffCount, count > 0 {
+                Label(Self.handoffPrompt(count: count), systemImage: "sparkles")
+                    .font(.callout)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor.opacity(0.12)))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Text("Cubit captures a frozen snapshot of your screen so your measurements stay put while you draw, and so you can export a marked-up image. Nothing leaves your Mac.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // macOS names this permission "Screen & System Audio Recording" and its prompt says
+            // "record this computer's screen and audio". Cubit never captures audio; say so, because
+            // the user cannot tell from the system's wording.
+            Text("macOS calls this “Screen & System Audio Recording.” Cubit takes still snapshots only — it never records audio.")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -160,6 +234,6 @@ struct OnboardingView: View {
             }
         }
         .padding(24)
-        .frame(width: 420, height: 360)
+        .frame(width: 420, height: 470)
     }
 }

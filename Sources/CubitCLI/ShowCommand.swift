@@ -19,12 +19,20 @@ enum ShowCommand {
             throw CLIError(.usage, "cubit show: --regions <file> is required")
         }
         let result = try HandoffLauncher.open(documentAtPath: path)
-        try Output.json(ShowResult(opened: result.path, measurementCount: result.count))
+        try Output.json(ShowResult(
+            opened: result.path,
+            measurementCount: result.count,
+            status: HandoffStatus.delivered.rawValue,
+            note: HandoffStatus.deliveredNote
+        ))
         return .ok
     }
 
     struct ShowResult: Encodable {
         let opened: String
         let measurementCount: Int
+        /// Always `delivered`: see `HandoffStatus`.
+        let status: String
+        let note: String
     }
 }
