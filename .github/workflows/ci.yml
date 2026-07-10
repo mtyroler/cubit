@@ -26,6 +26,22 @@ jobs:
           swift build
           swift test
 
+      # Release ships universal binaries; build them here too so a tag never fails first.
+      - name: Build the agent binaries universal (release parity)
+        run: |
+          swift build -c release --arch arm64 --arch x86_64
+          BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+          for tool in cubit cubit-mcp; do
+            archs="$(lipo -archs "$BIN/$tool")"
+            echo "$tool: $archs"
+            case "$archs" in
+              *arm64*) ;; *) echo "::error::$tool is missing arm64"; exit 1 ;;
+            esac
+            case "$archs" in
+              *x86_64*) ;; *) echo "::error::$tool is missing x86_64"; exit 1 ;;
+            esac
+          done
+
   package-app:
     if: github.event_name == 'pull_request'
     runs-on: macos-26
