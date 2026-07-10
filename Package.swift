@@ -62,6 +62,7 @@ let package = Package(
                 "Cubit/Export/ExportRenderer.swift",
                 "Cubit/Export/ScreenshotAnnotationView.swift",
                 "Cubit/Export/StyledWindowExportView.swift",
+                "Cubit/Export/ExportBackgroundViews.swift",
                 "Cubit/Export/MetadataFooterView.swift",
                 "Cubit/Export/ExportTypography.swift",
                 "CubitCLI",
