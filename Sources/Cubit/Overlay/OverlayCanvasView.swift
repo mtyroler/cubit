@@ -90,6 +90,12 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     private var toolFlashDismissWork: DispatchWorkItem?
     private var trackingArea: NSTrackingArea?
     private var hovering = false
+
+    /// One VoiceOver element per measurement, keyed so focus survives a redraw.
+    private var accessibilityElementsByID: [UUID: MeasurementAccessibilityElement] = [:]
+    private var orderedAccessibilityElements: [MeasurementAccessibilityElement] = []
+    private var lastAnnouncedElementIDs: [UUID] = []
+    private var lastAnnouncedSelection: UUID?
     private var lastCursor: CanonicalPoint?
     private var activeDrag: ActiveDrag?
     private var lastDragPoint: CanonicalPoint?
@@ -521,6 +527,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         needsDisplay = true
         updateHUD()
         updateCursor()
+        updateAccessibilityElements()
         onDraftChanged?()
     }
 
@@ -615,6 +622,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     /// selected injected measurement's handles become live immediately.
     func refreshAfterHandoff() {
         needsDisplay = true
+        updateAccessibilityElements()
         window?.invalidateCursorRects(for: self)
         if hovering { (editCursor() ?? currentToolCursor()).set() }
     }
@@ -622,6 +630,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     /// Brief confirmation ("Saved to …") near the top of the overlay, auto-dismissed. A handoff
     /// arrival uses a longer hold so the user notices the proposal.
     func showToast(_ message: String, duration: TimeInterval = 2.4) {
+        // The toast is the confirmation the user just asked for (an export landing, a handoff
+        // arriving), so it interrupts rather than queues.
+        AccessibilityAnnouncer.announce(message, priority: .high)
         toastDismissWork?.cancel()
         toastHost?.removeFromSuperview()
 
@@ -652,6 +663,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     /// click) — fades in, holds, fades out after ~700ms. The tool pill alone is too
     /// peripheral to register a switch.
     private func showToolFlash(_ label: String) {
+        AccessibilityAnnouncer.announce(label)
         toolFlashDismissWork?.cancel()
         toolFlashHost?.removeFromSuperview()
 
@@ -705,6 +717,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         guard let session else { return }
         session.cycleMode()
         resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
+        AccessibilityAnnouncer.announce("Reference: \(session.resolved.descriptor)")
         refresh()
     }
 
@@ -720,12 +733,21 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     /// recolors live, which is its own feedback, so no flash here (unlike tool switches).
     private func cycleColor(forward: Bool = true) {
         session?.cycleColor(forward: forward)
+        announceColor()
         refresh()
     }
 
     private func setColor(index: Int) {
         session?.setColor(index: index)
+        announceColor()
         refresh()
+    }
+
+    /// The shape recoloring is its own feedback for a sighted user; for everyone else the color
+    /// change is otherwise entirely silent.
+    private func announceColor() {
+        guard let index = session?.currentColorIndex else { return }
+        AccessibilityAnnouncer.announce(Palette.name(forIndex: index).capitalized)
     }
 
     // MARK: History
@@ -734,24 +756,43 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     /// reference has to be recomputed before the redraw — otherwise the HUD and every label
     /// percentage keep quoting the reference the user just undid.
     private func undo() {
-        session?.undo()
+        guard let session, session.canUndo else { return }
+        // Captured before the undo — afterwards the manager has moved it to the redo stack.
+        let actionName = session.undoActionName
+        session.undo()
+        AccessibilityAnnouncer.announce(actionName.isEmpty ? "Undo" : "Undid \(actionName)")
         resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
         refresh()
     }
 
     private func redo() {
-        session?.redo()
+        guard let session, session.canRedo else { return }
+        let actionName = session.redoActionName
+        session.redo()
+        AccessibilityAnnouncer.announce(actionName.isEmpty ? "Redo" : "Redid \(actionName)")
         resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
         refresh()
     }
 
     private func duplicateSelected() {
-        guard session?.duplicateSelected() != nil else { return }
+        guard let session, let copy = session.duplicateSelected() else { return }
+        AccessibilityAnnouncer.announce("Duplicated \(MeasurementAccessibilityDescription.label(for: copy))")
         refresh()
     }
 
     private func clearAll() {
-        guard session?.clearAll() == true else { return }
+        guard let session else { return }
+        let count = session.measurements.count
+        guard session.clearAll() else { return }
+        AccessibilityAnnouncer.announce("Cleared \(count) measurement\(count == 1 ? "" : "s")")
+        refresh()
+    }
+
+    private func deleteSelected() {
+        guard let session, let selected = session.selectedMeasurement else { return }
+        let description = MeasurementAccessibilityDescription.label(for: selected)
+        session.deleteSelected()
+        AccessibilityAnnouncer.announce("Deleted \(description)")
         refresh()
     }
 
@@ -910,10 +951,104 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     @objc private func menuSelectTool(_ sender: NSMenuItem) { selectTool(toolForTag(sender.tag)) }
     @objc private func menuSetColor(_ sender: NSMenuItem) { setColor(index: sender.tag) }
 
-    @objc private func menuDelete() {
-        guard let session, session.selectedID != nil else { return }
-        session.deleteSelected()
+    @objc private func menuDelete() { deleteSelected() }
+
+    // MARK: Accessibility
+
+    /// The canvas draws its measurements instead of building subviews, so it has to publish the
+    /// accessibility tree by hand. `.layoutArea` + `.layoutItem` children is AppKit's vocabulary
+    /// for a drawing surface of user-positionable graphics; VoiceOver then offers move and
+    /// resize on each shape rather than treating the overlay as one opaque rectangle.
+    override func accessibilityRole() -> NSAccessibility.Role? { .layoutArea }
+    override func isAccessibilityElement() -> Bool { true }
+    override func accessibilityLabel() -> String? { "Measurement canvas" }
+
+    override func accessibilityHelp() -> String? {
+        "Drag to draw a measurement. Right-click a measurement for actions."
+    }
+
+    /// The live reading while drawing, so a draft isn't silent. Committed shapes carry their own
+    /// values; the HUD, toast, and tool-switch flash are announced rather than exposed as
+    /// elements, which is why they're absent from `accessibilityChildren`.
+    override func accessibilityValue() -> Any? {
+        guard let session, let draft = session.draft, let rect = session.draftRect else { return nil }
+        let provisional = Measurement(kind: draft.kind, rect: rect, colorIndex: draft.colorIndex)
+        return MeasurementAccessibilityDescription.value(
+            for: provisional,
+            reference: session.reference,
+            referenceMode: session.resolved.mode,
+            scale: session.referenceScale
+        )
+    }
+
+    /// Measurements first, in the order they were drawn, then the tool pill, then the export
+    /// menu when it's open. VoiceOver walks children in this order absent an explicit
+    /// navigation order, which `NSAccessibilityElement` can't participate in anyway.
+    override func accessibilityChildren() -> [Any]? {
+        var children: [Any] = orderedAccessibilityElements
+        if let toolPillHost { children.append(toolPillHost) }
+        if let exportMenuHost { children.append(exportMenuHost) }
+        return children
+    }
+
+    override func accessibilitySelectedChildren() -> [Any]? {
+        guard let id = session?.selectedID, let element = accessibilityElementsByID[id] else { return [] }
+        return [element]
+    }
+
+    /// Rebuilds element frames every redraw (cheap — there are only ever a handful) but posts
+    /// notifications only when membership or selection actually changed, so a drag doesn't
+    /// flood VoiceOver with layout churn.
+    private func updateAccessibilityElements() {
+        guard let session, let converter else { return }
+
+        var ordered: [MeasurementAccessibilityElement] = []
+        var live: [UUID: MeasurementAccessibilityElement] = [:]
+
+        for measurement in session.measurements {
+            let element = accessibilityElementsByID[measurement.id]
+                ?? MeasurementAccessibilityElement(measurementID: measurement.id, canvas: self)
+            // Accessibility frames are global Cocoa screen coordinates — exactly what the
+            // canonical converter already produces, so no view-space round trip is needed.
+            element.publishFrame(converter.cocoa(fromCanonical: measurement.rect))
+            live[measurement.id] = element
+            ordered.append(element)
+        }
+
+        accessibilityElementsByID = live
+        orderedAccessibilityElements = ordered
+
+        let ids = ordered.map(\.measurementID)
+        if ids != lastAnnouncedElementIDs {
+            lastAnnouncedElementIDs = ids
+            NSAccessibility.post(element: self, notification: .layoutChanged)
+        }
+        if session.selectedID != lastAnnouncedSelection {
+            lastAnnouncedSelection = session.selectedID
+            NSAccessibility.post(element: self, notification: .selectedChildrenChanged)
+        }
+    }
+
+    /// Re-entry point for edits driven by VoiceOver rather than by the mouse or keyboard.
+    func refreshFromAccessibility() {
         refresh()
+    }
+
+    /// VoiceOver repositions a layout item by writing its frame. Translate that back to a delta
+    /// and route it through `nudgeSelected`, so the move registers undo and coalesces exactly
+    /// like an arrow-key move — and so the shape's size survives a reposition.
+    func moveMeasurementFromAccessibility(id: UUID, toScreenFrame frame: NSRect) {
+        guard let session, let converter,
+              let measurement = session.measurements.first(where: { $0.id == id }) else { return }
+
+        let target = converter.canonical(fromCocoa: frame)
+        let dx = target.origin.x - measurement.rect.origin.x
+        let dy = target.origin.y - measurement.rect.origin.y
+        guard dx != 0 || dy != 0 else { return }
+
+        session.select(id)
+        session.nudgeSelected(dx: dx, dy: dy)
+        refreshFromAccessibility()
     }
 
     // MARK: Reference resolution
@@ -1008,13 +1143,16 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             else { onDismiss?() }
             return
         case 36, 76: // Return / keypad Enter
-            if session.draft != nil { session.commitDraft(); refresh() }
+            if session.draft != nil {
+                if let added = session.commitDraft() { announceAdded(added, session: session) }
+                refresh()
+            }
             return
         case 48: // Tab — cycle reference mode
             cycleReferenceMode()
             return
         case 51, 117: // Delete / forward delete
-            if session.selectedID != nil { session.deleteSelected(); refresh() }
+            deleteSelected()
             return
         case 123, 124, 125, 126: // arrows
             handleArrow(keyCode: event.keyCode, resize: modifiers.contains(.option), large: modifiers.contains(.shift))
@@ -1180,8 +1318,25 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         }
 
         session.updateDraft(to: point, constrain: event.modifierFlags.contains(.shift), fromCenter: event.modifierFlags.contains(.option))
-        session.commitDraft()
+        // A drag that produced nothing (under the minimum) commits nothing — say so, rather
+        // than leaving a VoiceOver user to wonder whether the shape exists.
+        if let added = session.commitDraft() {
+            announceAdded(added, session: session)
+        } else {
+            AccessibilityAnnouncer.announce("No measurement added")
+        }
         refresh()
+    }
+
+    private func announceAdded(_ measurement: Measurement, session: MeasurementSession) {
+        AccessibilityAnnouncer.announce(
+            MeasurementAccessibilityDescription.addedAnnouncement(
+                for: measurement,
+                reference: session.reference,
+                referenceMode: session.resolved.mode,
+                scale: session.referenceScale
+            )
+        )
     }
 
     private static func actionName(for kind: DragKind) -> String {

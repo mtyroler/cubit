@@ -47,6 +47,10 @@ struct ToolPillView: View {
                     hintTag("⇥")
                 }
             }
+            .help("Reference: \(modeName) — Tab to cycle")
+            .accessibilityLabel("Reference frame")
+            .accessibilityValue(modeName)
+            .accessibilityHint("Cycles between window, screen, and custom")
 
             pillButton(action: onBeginCustomFrame) {
                 HStack(spacing: 5) {
@@ -55,6 +59,8 @@ struct ToolPillView: View {
                     hintTag("C")
                 }
             }
+            .help("Draw a custom reference frame — C")
+            .accessibilityLabel("Draw custom reference frame")
 
             divider
 
@@ -68,6 +74,8 @@ struct ToolPillView: View {
             .disabled(!appState.captureAvailable)
             .opacity(appState.captureAvailable ? 1 : 0.4)
             .help(appState.captureAvailable ? "Export annotated screenshot" : "Screen Recording required")
+            .accessibilityLabel("Export annotated screenshot")
+            .accessibilityHint(appState.captureAvailable ? "" : "Unavailable until Screen Recording is granted")
 
             divider
 
@@ -121,6 +129,7 @@ struct ToolPillView: View {
         Rectangle()
             .fill(.tertiary)
             .frame(width: 1, height: 20)
+            .accessibilityHidden(true)
     }
 
     private func toolButton(_ symbol: String, hint: String, kind: MeasurementKind) -> some View {
@@ -166,6 +175,9 @@ struct ToolPillView: View {
         .disabled(colorIndex == nil)
         .opacity(colorIndex == nil ? 0.35 : 1)
         .help("Color — X / 1–8")
+        .accessibilityLabel("Color")
+        .accessibilityValue(colorIndex.map { Palette.name(forIndex: $0).capitalized } ?? "None")
+        .accessibilityHint("Cycles the color of the selected measurement")
     }
 
     private func pillButton<Content: View>(action: @escaping () -> Void, @ViewBuilder content: () -> Content) -> some View {

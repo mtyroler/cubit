@@ -31,9 +31,14 @@ struct CubitApp: App {
         } label: {
             if appDelegate.settings.showMenuBarPercent,
                let percent = appDelegate.overlayController.appState.draftPercent {
+                // Monospaced digits: the label is rewritten on every mouse-move during a drag,
+                // and proportional digits shove every menu bar item to its left back and forth.
                 Text(percent)
+                    .monospacedDigit()
+                    .accessibilityLabel("Cubit, measuring \(percent)")
             } else {
                 Image(systemName: "ruler")
+                    .accessibilityLabel("Cubit")
             }
         }
         .menuBarExtraStyle(.menu)

@@ -114,9 +114,11 @@ struct OnboardingView: View {
             Image(nsImage: model.appIcon)
                 .resizable()
                 .frame(width: 72, height: 72)
+                .accessibilityHidden(true)
 
             Text("Cubit needs Screen Recording")
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             Text("Cubit captures a frozen snapshot of your screen so your measurements stay put while you draw, and so you can export a marked-up image. Nothing leaves your Mac.")
                 .font(.callout)
@@ -133,6 +135,9 @@ struct OnboardingView: View {
                 }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
+                // `.borderedProminent` only *looks* like the default button; without this,
+                // Return does nothing in the app's very first window.
+                .keyboardShortcut(.defaultAction)
 
                 if model.needsRelaunch {
                     Button {

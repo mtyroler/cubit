@@ -157,6 +157,8 @@ private struct AppearanceSettingsTab: View {
             Section("Dim") {
                 VStack(alignment: .leading, spacing: 8) {
                     Slider(value: $settings.dimOpacity, in: SettingsStore.dimOpacityRange)
+                        .accessibilityLabel("Dim")
+                        .accessibilityValue(percentString(settings.dimOpacity))
                     HStack {
                         Text("\(Int((settings.dimOpacity * 100).rounded()))% dim")
                             .font(.caption)
@@ -169,7 +171,10 @@ private struct AppearanceSettingsTab: View {
                                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                                     .strokeBorder(.separator)
                             )
+                            .accessibilityHidden(true)
                     }
+                    // The caption already carries the value the slider announces.
+                    .accessibilityHidden(true)
                 }
             }
 
@@ -181,6 +186,11 @@ private struct AppearanceSettingsTab: View {
                             .frame(width: 20, height: 20)
                     }
                 }
+                // Eight non-interactive swatches: one element naming the palette beats eight
+                // anonymous images.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Measurement palette")
+                .accessibilityValue(Palette.colorNames.joined(separator: ", "))
             }
 
             Section("Markup") {
@@ -193,6 +203,8 @@ private struct AppearanceSettingsTab: View {
                             .foregroundStyle(.secondary)
                     }
                     Slider(value: $settings.measurementBorderWidth, in: SettingsStore.measurementBorderWidthRange, step: 1)
+                        .accessibilityLabel("Border width")
+                        .accessibilityValue("\(Int(settings.measurementBorderWidth.rounded())) points")
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -204,13 +216,18 @@ private struct AppearanceSettingsTab: View {
                             .foregroundStyle(.secondary)
                     }
                     Slider(value: $settings.measurementFillOpacity, in: SettingsStore.measurementFillOpacityRange)
+                        .accessibilityLabel("Fill opacity")
+                        .accessibilityValue(percentString(settings.measurementFillOpacity))
                 }
 
-                Toggle("Show label pills", isOn: $settings.showLabelPills)
+                Toggle("Show Label Pills", isOn: $settings.showLabelPills)
 
-                Picker("Label text size", selection: $settings.labelTextSize) {
+                Picker("Label Text Size", selection: $settings.labelTextSize) {
                     ForEach(LabelTextSize.allCases, id: \.self) { size in
-                        Text(size.displayName).tag(size)
+                        // "S"/"M"/"L" is a legible control and an unintelligible announcement.
+                        Text(size.displayName)
+                            .accessibilityLabel(size.accessibilityName)
+                            .tag(size)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -219,6 +236,10 @@ private struct AppearanceSettingsTab: View {
         .formStyle(.grouped)
         .padding(.bottom, 16)
         .scrollDisabled(true)
+    }
+
+    private func percentString(_ value: Double) -> String {
+        "\(Int((value * 100).rounded())) percent"
     }
 }
 

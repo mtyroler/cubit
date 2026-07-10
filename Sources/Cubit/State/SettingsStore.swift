@@ -26,6 +26,15 @@ enum LabelTextSize: String, CaseIterable, Sendable {
         case .large: return "L"
         }
     }
+
+    /// Spoken form of `displayName` — VoiceOver reading "S, M, L" tells nobody anything.
+    var accessibilityName: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        }
+    }
 }
 
 /// UserDefaults-backed app preferences. Injectable suite so tests never touch the real
