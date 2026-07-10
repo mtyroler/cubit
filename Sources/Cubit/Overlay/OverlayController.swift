@@ -338,7 +338,8 @@ final class OverlayController {
             metadata: metadata,
             markup: markup,
             windowImage: windowImage,
-            showTotals: framing.showTotals
+            showTotals: framing.showTotals,
+            background: framing.background
         )
     }
 

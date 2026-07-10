@@ -10,11 +10,20 @@ struct ExportFraming: Sendable, Equatable {
     /// Add a summed total per measurement kind to the legend (rectangle area, horizontal
     /// width, vertical height). Off by default.
     var showTotals: Bool
+    /// Decorative background behind styled window exports. Transparent by default; only
+    /// applies when window styling is active (exact window crop, shadow on).
+    var background: ExportBackgroundStyle
 
-    init(includeContext: Bool, windowShadow: Bool, showTotals: Bool = false) {
+    init(
+        includeContext: Bool,
+        windowShadow: Bool,
+        showTotals: Bool = false,
+        background: ExportBackgroundStyle = .transparent
+    ) {
         self.includeContext = includeContext
         self.windowShadow = windowShadow
         self.showTotals = showTotals
+        self.background = background
     }
 
     static let `default` = ExportFraming(includeContext: false, windowShadow: true)
@@ -26,6 +35,7 @@ struct ExportLayoutPreferences: @unchecked Sendable {
     static let includeContextKey = "export.includeContext"
     static let windowShadowKey = "export.windowShadow"
     static let showTotalsKey = "export.showTotals"
+    static let backgroundKey = "export.background"
     /// When true, a file export also writes a `<basename>.json` sidecar describing the
     /// measurements for machine parsing. Off by default; not part of `ExportFraming` since it
     /// changes what is written to disk, not how the image is composed.
@@ -60,13 +70,25 @@ struct ExportLayoutPreferences: @unchecked Sendable {
         nonmutating set { defaults.set(newValue, forKey: Self.showTotalsKey) }
     }
 
+    /// Defaults to `.transparent` when unset or when the stored value is unknown.
+    var background: ExportBackgroundStyle {
+        get { ExportBackgroundStyle(rawValue: defaults.string(forKey: Self.backgroundKey) ?? "") ?? .transparent }
+        nonmutating set { defaults.set(newValue.rawValue, forKey: Self.backgroundKey) }
+    }
+
     var framing: ExportFraming {
-        ExportFraming(includeContext: includeContext, windowShadow: windowShadow, showTotals: showTotals)
+        ExportFraming(
+            includeContext: includeContext,
+            windowShadow: windowShadow,
+            showTotals: showTotals,
+            background: background
+        )
     }
 
     func save(_ framing: ExportFraming) {
         includeContext = framing.includeContext
         windowShadow = framing.windowShadow
         showTotals = framing.showTotals
+        background = framing.background
     }
 }
