@@ -40,11 +40,20 @@ enum AnnotationLayoutEngine {
             )
         }
 
-        let legend = layoutLegend(request.legend, shapes: shapes, bounds: bounds, measuring: measuring)
+        let legend = layoutLegend(
+            request.legend,
+            placement: request.legendPlacement,
+            shapes: shapes,
+            bounds: bounds,
+            measuring: measuring
+        )
 
-        // Obstacles the pills should avoid: every shape, plus the legend card.
+        // Obstacles the pills should avoid: every shape, plus the legend card — but a
+        // below-window legend leaves the image entirely, freeing its corner for pills.
         var obstacles = shapes.map(\.rect)
-        obstacles.append(legend.frame)
+        if legend.placement == .overlay {
+            obstacles.append(legend.frame)
+        }
 
         let callouts = placeCallouts(
             request.callouts,
@@ -279,11 +288,26 @@ enum AnnotationLayoutEngine {
 
     private static func layoutLegend(
         _ input: LegendInput,
+        placement: LegendPlacement,
         shapes: [ShapeGeometry],
         bounds: CGRect,
         measuring: TextMeasuring
     ) -> LegendGeometry {
         let size = legendSize(input, measuring: measuring)
+
+        // A below-window legend keeps its measured size (the card still renders from it)
+        // but claims no position in the image: origin zero, never an obstacle.
+        if placement == .below {
+            return LegendGeometry(
+                frame: CGRect(origin: .zero, size: size),
+                placement: .below,
+                headerText: input.headerText,
+                rows: input.rows,
+                totals: input.totals,
+                wordmark: input.wordmark,
+                metadataHeight: input.metadataHeight
+            )
+        }
 
         let rightOrigin = CGPoint(
             x: bounds.maxX - legendMargin - size.width,
@@ -297,6 +321,7 @@ enum AnnotationLayoutEngine {
 
         return LegendGeometry(
             frame: frame,
+            placement: .overlay,
             headerText: input.headerText,
             rows: input.rows,
             totals: input.totals,

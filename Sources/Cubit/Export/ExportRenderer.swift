@@ -131,6 +131,11 @@ enum ExportRenderer {
         showTotals: Bool,
         background: ExportBackgroundStyle = .transparent
     ) -> CGImage? {
+        // Over a real background the legend moves below the window instead of covering
+        // content — but only when there are measurements to list; an empty legend stays
+        // in-image as the branding card. Transparent margins keep the overlay placement:
+        // a card floating in alpha would land on arbitrary backdrops.
+        let legendBelow = geo.styled && background != .transparent && !measurements.isEmpty
         let request = buildRequest(
             measurements: measurements,
             reference: reference,
@@ -139,7 +144,8 @@ enum ExportRenderer {
             imageSize: geo.pointSize,
             metadata: metadata,
             markup: markup,
-            showTotals: showTotals
+            showTotals: showTotals,
+            legendPlacement: legendBelow ? .below : .overlay
         )
         let layout = AnnotationLayoutEngine.layout(request, measuring: AttributedStringMeasurer())
 
@@ -352,7 +358,8 @@ enum ExportRenderer {
         imageSize: CGSize,
         metadata: ExportMetadata,
         markup: MarkupStyle,
-        showTotals: Bool
+        showTotals: Bool,
+        legendPlacement: LegendPlacement = .overlay
     ) -> LayoutRequest {
         var callouts: [CalloutInput] = []
         var rows: [LegendRowInput] = []
@@ -396,6 +403,7 @@ enum ExportRenderer {
             referenceMode: reference.mode,
             callouts: callouts,
             legend: legend,
+            legendPlacement: legendPlacement,
             metadataFooter: hasFooter ? metadataFooter(from: metadata) : nil,
             markup: markup
         )

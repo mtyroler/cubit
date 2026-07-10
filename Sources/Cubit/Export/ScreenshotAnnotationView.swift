@@ -56,9 +56,11 @@ struct AnnotatedWindowView: View {
                     .position(x: callout.frame.midX, y: callout.frame.midY)
             }
 
-            LegendCard(legend: layout.legend)
-                .frame(width: layout.legend.frame.width, height: layout.legend.frame.height)
-                .position(x: layout.legend.frame.midX, y: layout.legend.frame.midY)
+            if layout.legend.placement == .overlay {
+                LegendCard(legend: layout.legend)
+                    .frame(width: layout.legend.frame.width, height: layout.legend.frame.height)
+                    .position(x: layout.legend.frame.midX, y: layout.legend.frame.midY)
+            }
         }
         .frame(width: layout.imageSize.width, height: layout.imageSize.height)
     }
@@ -165,7 +167,9 @@ private struct CalloutPill: View {
     }
 }
 
-private struct LegendCard: View {
+/// Internal (not private): the styled export reuses this card below the window when the
+/// legend placement is `.below`, sized by the same engine-measured frame.
+struct LegendCard: View {
     let legend: LegendGeometry
 
     var body: some View {
