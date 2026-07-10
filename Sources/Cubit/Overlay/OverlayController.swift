@@ -324,7 +324,14 @@ final class OverlayController {
         pendingFraming ?? layoutPreferences.framing
     }
 
-    private func currentExport() async -> ExportRenderer.RenderedExport? {
+    /// The rendered export plus the framing it was rendered under, so save/copy can honor
+    /// per-export options that act outside the image (e.g. the JSON sidecar).
+    private struct FramedExport {
+        let rendered: ExportRenderer.RenderedExport
+        let framing: ExportFraming
+    }
+
+    private func currentExport() async -> FramedExport? {
         guard let session,
               let captured = ExportRenderer.captured(for: session.resolved, in: capturedDisplays) else { return nil }
         let reference = session.resolved
@@ -351,7 +358,7 @@ final class OverlayController {
             fillOpacity: CGFloat(settings.measurementFillOpacity),
             labelPointSize: CGFloat(settings.labelTextSize.pointSize)
         )
-        return ExportRenderer.renderExport(
+        guard let rendered = ExportRenderer.renderExport(
             measurements: session.measurements,
             reference: reference,
             captured: captured,
@@ -362,19 +369,23 @@ final class OverlayController {
             windowImage: windowImage,
             showTotals: framing.showTotals,
             background: framing.background
-        )
+        ) else { return nil }
+        return FramedExport(rendered: rendered, framing: framing)
     }
 
     func exportSave() {
         guard canExport else { showOnboarding(); return }
         Task { @MainActor in
-            guard let export = await currentExport() else { return }
+            guard let export = await currentExport() else {
+                frontCanvas?.showToast("Couldn't render the export — try again")
+                return
+            }
             let directoryURL = Exporter.resolvedSaveDirectory(forPath: settings.defaultExportFolderPath)
-            if let url = Exporter.saveToFile(export.png, above: windows as [NSWindow], directoryURL: directoryURL) {
+            if let url = Exporter.saveToFile(export.rendered.png, above: windows as [NSWindow], directoryURL: directoryURL) {
                 // The sidecar rides alongside a file save only, and never blocks the image:
                 // a failure to write it is swallowed inside `writeSidecar`.
-                if settings.writeJSONSidecar {
-                    Exporter.writeSidecar(export.sidecar, besideImageAt: url)
+                if export.framing.writeJSONSidecar {
+                    Exporter.writeSidecar(export.rendered.sidecar, besideImageAt: url)
                 }
                 frontCanvas?.showToast("Saved to \(Exporter.abbreviatedPath(url))")
             }
@@ -384,8 +395,11 @@ final class OverlayController {
     func exportCopy() {
         guard canExport else { showOnboarding(); return }
         Task { @MainActor in
-            guard let export = await currentExport() else { return }
-            Exporter.copyToPasteboard(export.png)
+            guard let export = await currentExport() else {
+                frontCanvas?.showToast("Couldn't render the export — try again")
+                return
+            }
+            Exporter.copyToPasteboard(export.rendered.png)
             frontCanvas?.showToast("Copied to clipboard")
         }
     }
@@ -393,7 +407,7 @@ final class OverlayController {
     private func exportDragProvider() -> NSItemProvider? {
         guard canExport else { return nil }
         return Exporter.dragItemProvider { [weak self] in
-            await self?.currentExport()?.png
+            await self?.currentExport()?.rendered.png
         }
     }
 

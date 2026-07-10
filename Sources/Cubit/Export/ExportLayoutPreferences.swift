@@ -13,17 +13,23 @@ struct ExportFraming: Sendable, Equatable {
     /// Decorative background behind styled window exports. Transparent by default; only
     /// applies when window styling is active (exact window crop, shadow on).
     var background: ExportBackgroundStyle
+    /// Write a `<basename>.json` sidecar next to a file export. Off by default. It changes
+    /// what lands on disk rather than how the image is composed, but it rides the framing
+    /// so the export panel's one-shot/remember flow covers it like every other toggle.
+    var writeJSONSidecar: Bool
 
     init(
         includeContext: Bool,
         windowShadow: Bool,
         showTotals: Bool = false,
-        background: ExportBackgroundStyle = .transparent
+        background: ExportBackgroundStyle = .transparent,
+        writeJSONSidecar: Bool = false
     ) {
         self.includeContext = includeContext
         self.windowShadow = windowShadow
         self.showTotals = showTotals
         self.background = background
+        self.writeJSONSidecar = writeJSONSidecar
     }
 
     static let `default` = ExportFraming(includeContext: false, windowShadow: true)
@@ -37,8 +43,7 @@ struct ExportLayoutPreferences: @unchecked Sendable {
     static let showTotalsKey = "export.showTotals"
     static let backgroundKey = "export.background"
     /// When true, a file export also writes a `<basename>.json` sidecar describing the
-    /// measurements for machine parsing. Off by default; not part of `ExportFraming` since it
-    /// changes what is written to disk, not how the image is composed.
+    /// measurements for machine parsing. Off by default.
     static let jsonSidecarKey = "export.jsonSidecar"
 
     private let defaults: UserDefaults
@@ -81,7 +86,8 @@ struct ExportLayoutPreferences: @unchecked Sendable {
             includeContext: includeContext,
             windowShadow: windowShadow,
             showTotals: showTotals,
-            background: background
+            background: background,
+            writeJSONSidecar: writeJSONSidecar
         )
     }
 
@@ -90,5 +96,6 @@ struct ExportLayoutPreferences: @unchecked Sendable {
         windowShadow = framing.windowShadow
         showTotals = framing.showTotals
         background = framing.background
+        writeJSONSidecar = framing.writeJSONSidecar
     }
 }

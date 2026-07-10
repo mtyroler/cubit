@@ -41,6 +41,12 @@ struct StyledWindowExportView: View {
         let barHeight = ExportBackgroundChrome.menuBarHeight(style: background, imageSize: layout.imageSize)
         VStack(spacing: WindowExportStyle.footerGap) {
             windowCard
+            // A below-placed legend stacks under the window like the footer card, sized by
+            // the same engine measurement the in-image card would have used.
+            if layout.legend.placement == .below {
+                LegendCard(legend: layout.legend)
+                    .frame(width: layout.legend.frame.width, height: layout.legend.frame.height)
+            }
             if let footer = layout.footer {
                 MetadataFooterCard(footer: footer)
             }

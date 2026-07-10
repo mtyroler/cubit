@@ -194,7 +194,7 @@ struct OnboardingView: View {
             // the user cannot tell from the system's wording.
             Text("macOS calls this “Screen & System Audio Recording.” Cubit takes still snapshots only — it never records audio.")
                 .font(.footnote)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 

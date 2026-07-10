@@ -220,7 +220,9 @@ private struct ExportSettingsTab: View {
             } header: {
                 Text("Layout")
             } footer: {
-                Text("The background fills the margins around styled window exports — a studio sweep, a gradient, or a classic Mac OS desktop.")
+                Text(settings.includeContext || !settings.windowShadow
+                    ? "Background is off: it needs a styled window export (window shadow on, surrounding context off)."
+                    : "The background fills the margins around styled window exports — a studio sweep, a gradient, or a classic Mac OS desktop. With a background on, the measurements panel moves below the window.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
