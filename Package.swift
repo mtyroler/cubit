@@ -60,6 +60,7 @@ let package = Package(
                 "Cubit/Reference/CGWindowInfoProvider.swift",
                 "Cubit/Capture/ScreenCaptureService.swift",
                 "Cubit/Export/ExportRenderer.swift",
+                "Cubit/Export/PaletteColor+SwiftUI.swift",
                 "Cubit/Export/ScreenshotAnnotationView.swift",
                 "Cubit/Export/StyledWindowExportView.swift",
                 "Cubit/Export/MetadataFooterView.swift",

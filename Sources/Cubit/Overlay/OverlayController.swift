@@ -17,7 +17,24 @@ final class OverlayController {
     private var session: MeasurementSession?
     private var previouslyActiveApp: NSRunningApplication?
     private var presenting = false
+    private var dismissing = false
+    private var dismissGeneration = 0
     private var continuedWithout = false
+
+    /// Fade durations. Short enough to feel like the overlay was already there, long enough
+    /// that a full-screen dim doesn't arrive as a hard cut.
+    private static let presentFadeDuration: TimeInterval = 0.12
+    private static let dismissFadeDuration: TimeInterval = 0.10
+
+    /// What a dismissed session was carrying, held so Escape is never destructive. Restored
+    /// into the next session (as one undo step) and cleared once it's been handed back.
+    private struct RestorableSession {
+        var measurements: [Measurement]
+        var customRect: CanonicalRect?
+        var mode: ReferenceMode
+    }
+
+    private var restorable: RestorableSession?
 
     /// Canonical frames of the screens the current overlay spans; used to clamp an incoming
     /// handoff into reachable bounds. Set when the overlay presents, cleared on dismiss.
@@ -49,6 +66,9 @@ final class OverlayController {
     }
 
     func present() {
+        // A present() arriving mid-fade (hotkey mashing, or a handoff landing as the overlay
+        // goes down) collapses the fade rather than being dropped.
+        if dismissing { finishDismissImmediately() }
         guard !isPresented, !presenting else { return }
 
         switch permissions.entryDecision(hasContinuedWithout: continuedWithout) {
@@ -123,6 +143,7 @@ final class OverlayController {
             captured: earlyDisplays
         )
         orderWindowsFront()
+        restoreMeasurementsIfNeeded(into: session)
 
         // A handoff queued before the overlay existed injects now that the session and windows do.
         if let pending = pendingHandoff {
@@ -137,6 +158,26 @@ final class OverlayController {
                 self.applyCaptured(outcome)
             }
         }
+    }
+
+    /// Hands a dismissed session's work back to the new one. Escape is a dismiss, not a
+    /// delete: the measurements come back, clamped into whatever screens exist now (the
+    /// display arrangement may have changed while the overlay was down), as a single undo
+    /// step so ⌘Z still means "no, give me the clean slate".
+    private func restoreMeasurementsIfNeeded(into session: MeasurementSession) {
+        guard let restorable else { return }
+        self.restorable = nil
+
+        let bounds = canonicalScreenRects.isEmpty ? [session.reference] : canonicalScreenRects
+        let clamped = HandoffMapper.clamped(restorable.measurements, to: bounds)
+        guard session.restore(clamped, customRect: restorable.customRect, mode: restorable.mode) else { return }
+
+        for window in windows {
+            (window.contentView as? OverlayCanvasView)?.refreshAfterHandoff()
+        }
+        let plural = clamped.count == 1 ? "" : "s"
+        frontCanvas?.showToast("Restored \(clamped.count) measurement\(plural) — ⌘Z to clear")
+        updateAppState()
     }
 
     private func buildWindows(
@@ -154,6 +195,8 @@ final class OverlayController {
             let window = OverlayWindow(contentRect: screen.frame)
             window.acceptsMouseMovedEvents = true
             let canvas = OverlayCanvasView(frame: CGRect(origin: .zero, size: screen.frame.size))
+            // Layer-backed so a late-arriving snapshot can cross-fade in (`setFrozenImage`).
+            canvas.wantsLayer = true
             canvas.converter = converter
             canvas.display = descriptor
             canvas.session = session
@@ -198,14 +241,26 @@ final class OverlayController {
         }
     }
 
+    /// Fades the overlay in rather than hard-cutting a full-screen dim over whatever the user
+    /// was looking at. Reduce Motion gets the instant path.
     private func orderWindowsFront() {
+        let animates = !OverlayCanvasView.prefersReducedMotion
+
         for window in windows {
+            window.alphaValue = animates ? 0 : 1
             window.orderFrontRegardless()
         }
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         if let first = windows.first {
             first.makeKeyAndOrderFront(nil)
             first.makeFirstResponder(first.contentView)
+        }
+
+        guard animates else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.presentFadeDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            for window in windows { window.animator().alphaValue = 1 }
         }
     }
 
@@ -219,23 +274,69 @@ final class OverlayController {
             guard let canvas = window.contentView as? OverlayCanvasView,
                   let id = canvas.display?.id,
                   let match = displays.first(where: { $0.displayID == id }) else { continue }
-            canvas.frozenImage = match.cgImage
+            // This snapshot lost the race with presentation — cross-fade it in so the scene
+            // doesn't visibly pop from live to frozen.
+            canvas.setFrozenImage(match.cgImage, animated: true)
         }
     }
 
     func dismiss() {
-        guard isPresented else { return }
+        guard isPresented, !dismissing else { return }
 
-        for window in windows {
-            window.orderOut(nil)
-            window.contentView = nil
+        // Escape must never destroy work. Whatever the session was carrying is held for the
+        // next present(); `restoreMeasurementsIfNeeded` hands it back as one undo step.
+        if let session, !session.measurements.isEmpty {
+            restorable = RestorableSession(
+                measurements: session.measurements,
+                customRect: session.customRect,
+                mode: session.mode
+            )
+        } else {
+            restorable = nil
         }
-        windows.removeAll()
+
+        // State the rest of the app observes goes down immediately; only the windows linger
+        // for the fade. `isPresented` stays true until they're gone, and `dismissing` keeps a
+        // second Escape (or a hotkey toggle) from racing the animation.
         session = nil
         capturedDisplays = []
         canonicalScreenRects = []
         appState.draftPercent = nil
         appState.captureAvailable = false
+
+        guard !OverlayCanvasView.prefersReducedMotion else {
+            teardownWindows()
+            return
+        }
+
+        dismissing = true
+        dismissGeneration += 1
+        let generation = dismissGeneration
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.dismissFadeDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            for window in windows { window.animator().alphaValue = 0 }
+        } completionHandler: { [weak self] in
+            guard let self, self.dismissing, self.dismissGeneration == generation else { return }
+            self.dismissing = false
+            self.teardownWindows()
+        }
+    }
+
+    /// Collapses an in-flight dismiss fade. Bumping the generation orphans the animation's
+    /// completion block, so it can't tear down the windows a re-present has already rebuilt.
+    private func finishDismissImmediately() {
+        dismissGeneration += 1
+        dismissing = false
+        teardownWindows()
+    }
+
+    private func teardownWindows() {
+        for window in windows {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        windows.removeAll()
 
         previouslyActiveApp?.activate()
         previouslyActiveApp = nil
@@ -250,7 +351,9 @@ final class OverlayController {
     /// surfaced in the arrival toast.
     func handleHandoff(_ proposed: [Measurement], note: String?) {
         guard !proposed.isEmpty else { return }
-        if isPresented {
+        // Keyed off the live session, not `isPresented`: during a dismiss fade the windows are
+        // still up but the session is already gone, and a handoff must never land in that gap.
+        if session != nil {
             injectHandoff(proposed, note: note)
         } else {
             pendingHandoff = (proposed, note)

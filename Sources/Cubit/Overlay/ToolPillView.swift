@@ -9,6 +9,8 @@ struct ToolPillView: View {
     var onCycleColor: () -> Void
     var onExport: () -> Void
     var onDismiss: () -> Void
+    var onUndo: () -> Void
+    var onRedo: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -16,6 +18,23 @@ struct ToolPillView: View {
             toolButton("arrow.left.and.right", hint: "H", kind: .horizontal)
             toolButton("arrow.up.and.down", hint: "V", kind: .vertical)
             colorSwatchButton
+
+            divider
+
+            historyButton(
+                "arrow.uturn.backward",
+                hint: "⌘Z",
+                enabled: session.canUndo,
+                title: title("Undo", session.undoActionName),
+                action: onUndo
+            )
+            historyButton(
+                "arrow.uturn.forward",
+                hint: "⇧⌘Z",
+                enabled: session.canRedo,
+                title: title("Redo", session.redoActionName),
+                action: onRedo
+            )
 
             divider
 
@@ -56,14 +75,46 @@ struct ToolPillView: View {
                 HStack(spacing: 5) {
                     Text("Done")
                         .font(.system(size: 11, weight: .medium))
+                    // Spelled out, not "⎋": at this caption size the glyph reads as a circular
+                    // "reset" arrow. The contextual menu's Done item uses the real key
+                    // equivalent, which AppKit draws at menu size where the glyph is legible.
                     hintTag("esc")
                 }
             }
+            .help("Done — esc")
+            .accessibilityLabel("Done")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: Capsule())
         .fixedSize()
+    }
+
+    /// "Undo Move Measurement" when the manager knows what the step was, plain "Undo" otherwise.
+    private func title(_ verb: String, _ actionName: String) -> String {
+        actionName.isEmpty ? verb : "\(verb) \(actionName)"
+    }
+
+    /// Undo and redo were reachable only by ⌘Z. Every overlay capability needs a visible,
+    /// clickable affordance — and the tooltip names the step it will unwind.
+    private func historyButton(
+        _ symbol: String,
+        hint: String,
+        enabled: Bool,
+        title: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        pillButton(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .regular))
+                hintTag(hint)
+            }
+        }
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.35)
+        .help(title)
+        .accessibilityLabel(title)
     }
 
     private var divider: some View {
@@ -74,6 +125,7 @@ struct ToolPillView: View {
 
     private func toolButton(_ symbol: String, hint: String, kind: MeasurementKind) -> some View {
         let active = session.tool == kind
+        let name = toolName(kind)
         return pillButton(action: { onSelectTool(kind) }) {
             VStack(spacing: 2) {
                 Image(systemName: symbol)
@@ -83,6 +135,17 @@ struct ToolPillView: View {
         }
         .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary))
         .background(active ? AnyShapeStyle(Color.accentColor.opacity(0.15)) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .help("\(name) — \(hint)")
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(active ? [.isSelected] : [])
+    }
+
+    private func toolName(_ kind: MeasurementKind) -> String {
+        switch kind {
+        case .rectangle: return "Rectangle"
+        case .horizontal: return "Horizontal"
+        case .vertical: return "Vertical"
+        }
     }
 
     /// Shows the color of the active draft/selection; empty (disabled) when there's no

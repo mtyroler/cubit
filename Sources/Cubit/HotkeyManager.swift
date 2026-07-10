@@ -45,6 +45,10 @@ final class HotkeyManager {
 
     private(set) var keyCode: UInt32
     private(set) var carbonModifiers: UInt32
+    /// True when the last `register()` was refused by the system — almost always because
+    /// another app already owns the combination. Surfaced in the Shortcuts settings tab: a
+    /// recorder that shows a shortcut which silently does nothing is worse than no recorder.
+    private(set) var registrationFailed = false
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
 
@@ -95,7 +99,7 @@ final class HotkeyManager {
 
     private func register() {
         unregister()
-        RegisterEventHotKey(
+        let status = RegisterEventHotKey(
             keyCode,
             carbonModifiers,
             hotKeyID,
@@ -103,6 +107,7 @@ final class HotkeyManager {
             0,
             &hotKeyRef
         )
+        registrationFailed = status != noErr || hotKeyRef == nil
     }
 
     private func unregister() {

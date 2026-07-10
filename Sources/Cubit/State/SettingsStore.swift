@@ -174,13 +174,17 @@ final class SettingsStore {
 
     /// Reflects (and drives) the system login-item registration via SMAppService. A no-op
     /// under XCTest so tests never register/unregister a real login item.
+    ///
+    /// Backed by a stored property rather than reading `SMAppService.status` on every get:
+    /// a computed property touching no stored state is invisible to `@Observable`, so the
+    /// Settings toggle would keep showing whatever the user clicked even when the system
+    /// refused it. After every attempt this is re-synced from the real registration status,
+    /// so the switch can only show what actually happened.
     var launchAtLogin: Bool {
-        get {
-            guard !Self.isRunningTests else { return false }
-            return SMAppService.mainApp.status == .enabled
-        }
+        get { _launchAtLogin }
         set {
             guard !Self.isRunningTests else { return }
+            launchAtLoginFailure = nil
             do {
                 if newValue {
                     try SMAppService.mainApp.register()
@@ -188,15 +192,33 @@ final class SettingsStore {
                     try SMAppService.mainApp.unregister()
                 }
             } catch {
-                // Registration can legitimately fail (e.g. already in the desired state,
-                // or the user declined in System Settings). The getter always reflects
-                // whatever SMAppService actually did, so there's nothing to roll back.
+                launchAtLoginFailure = error.localizedDescription
             }
+            _launchAtLogin = Self.systemLaunchAtLoginEnabled
         }
     }
 
+    /// Non-nil when the last `launchAtLogin` write failed — surfaced inline in Settings, next
+    /// to the toggle that didn't move. Cleared on the next successful attempt.
+    private(set) var launchAtLoginFailure: String?
+
+    /// Re-reads the real login-item status. The user can flip it in System Settings while the
+    /// app is running, so Settings calls this when it appears.
+    func refreshLaunchAtLogin() {
+        guard !Self.isRunningTests else { return }
+        _launchAtLogin = Self.systemLaunchAtLoginEnabled
+    }
+
+    private static var systemLaunchAtLoginEnabled: Bool {
+        guard !isRunningTests else { return false }
+        return SMAppService.mainApp.status == .enabled
+    }
+
+    private var _launchAtLogin: Bool
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        self._launchAtLogin = Self.systemLaunchAtLoginEnabled
 
         self.defaultTool = MeasurementKind(rawValue: defaults.string(forKey: Keys.defaultTool) ?? "") ?? .rectangle
         self.defaultReferenceMode = ReferenceMode(rawValue: defaults.string(forKey: Keys.defaultReferenceMode) ?? "") ?? .windowUnderCursor

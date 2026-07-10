@@ -1,15 +1,5 @@
 import SwiftUI
 
-private extension PaletteColor {
-    var swiftUIColor: Color { Color(.sRGB, red: red, green: green, blue: blue, opacity: 1) }
-
-    /// Legible ink for text/marks drawn on top of this swatch color.
-    var inkColor: Color {
-        let luminance = 0.299 * red + 0.587 * green + 0.114 * blue
-        return luminance > 0.62 ? Color(.sRGB, white: 0.12, opacity: 1) : .white
-    }
-}
-
 /// Renders the composed export image: frozen screenshot + measurement marks, callout pills,
 /// leader lines, and the legend card. Pure presentation — every position comes from the
 /// engine's `ExportLayout`; every string is pre-composed. Drawn by `ImageRenderer`.
@@ -78,7 +68,7 @@ struct AnnotatedWindowView: View {
 
     private func drawShape(_ shape: ShapeGeometry, in context: GraphicsContext) {
         let palette = Palette.color(forIndex: shape.colorIndex)
-        let color = palette.swiftUIColor
+        let color = palette.color
         let r = shape.rect
 
         switch shape.kind {
@@ -127,7 +117,7 @@ struct AnnotatedWindowView: View {
 
     private func drawLeader(_ callout: PlacedCallout, in context: GraphicsContext) {
         guard let leader = callout.leader else { return }
-        let color = Palette.color(forIndex: callout.colorIndex).swiftUIColor
+        let color = Palette.color(forIndex: callout.colorIndex).color
         var line = Path()
         line.move(to: leader.start); line.addLine(to: leader.end)
         context.stroke(line, with: .color(color.opacity(0.85)), lineWidth: 1.5)
@@ -160,7 +150,7 @@ private struct CalloutPill: View {
         .padding(.horizontal, AnnotationLayoutEngine.pillPaddingH)
         .padding(.vertical, AnnotationLayoutEngine.pillPaddingV)
         .frame(width: callout.frame.width, height: callout.frame.height, alignment: .leading)
-        .background(palette.swiftUIColor, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .background(palette.color, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         .shadow(color: .black.opacity(0.28), radius: 3, x: 0, y: 1)
     }
 }
@@ -180,7 +170,7 @@ private struct LegendCard: View {
                 // row model exactly (swatch + gap + label + ≥gap + value).
                 HStack(spacing: 0) {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Palette.color(forIndex: row.colorIndex).swiftUIColor)
+                        .fill(Palette.color(forIndex: row.colorIndex).color)
                         .frame(width: AnnotationLayoutEngine.legendSwatch, height: AnnotationLayoutEngine.legendSwatch)
                     Text(row.labelText)
                         .font(ExportFontRole.legendLabel.font)

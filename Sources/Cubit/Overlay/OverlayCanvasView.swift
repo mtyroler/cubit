@@ -8,6 +8,25 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var session: MeasurementSession?
     var appState: AppState?
     var frozenImage: CGImage? { didSet { needsDisplay = true } }
+
+    /// True when the user has asked the system to reduce motion; every overlay animation
+    /// checks this and falls back to an instant change.
+    static var prefersReducedMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    /// Swaps in a snapshot that lost the capture race, cross-fading rather than popping.
+    /// Nothing is drawn over the background yet at this point in a session, so fading the
+    /// whole layer is exactly the right visual.
+    func setFrozenImage(_ image: CGImage?, animated: Bool) {
+        if animated, !Self.prefersReducedMotion, let layer {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = 0.18
+            layer.add(fade, forKey: "frozenImageFade")
+        }
+        frozenImage = image
+    }
     /// Height of the menu-bar strip (points) to leave unfrozen at the top of this display.
     var topInset: CGFloat = 0
     /// Height of the Dock strip (points), when docked at the bottom of this display — 0 if
@@ -44,6 +63,12 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         case handle(UUID, HandleTarget)
         case label(UUID)
         case body(UUID)
+
+        var id: UUID {
+            switch self {
+            case .handle(let id, _), .label(let id), .body(let id): return id
+            }
+        }
     }
 
     private enum DragKind {
@@ -92,7 +117,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             onBeginCustomFrame: { [weak self] in self?.beginCustomFrame() },
             onCycleColor: { [weak self] in self?.cycleColor() },
             onExport: { [weak self] in self?.toggleExportMenu() },
-            onDismiss: { [weak self] in self?.onDismiss?() }
+            onDismiss: { [weak self] in self?.onDismiss?() },
+            onUndo: { [weak self] in self?.undo() },
+            onRedo: { [weak self] in self?.redo() }
         )
         let host = NSHostingView(rootView: view)
         addSubview(host)
@@ -305,7 +332,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         let text = MeasurementLabel.text(for: measurement, reference: session.reference, scale: session.referenceScale)
         return NSAttributedString(string: text, attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: CGFloat(labelTextSize.pointSize), weight: .semibold),
-            .foregroundColor: NSColor.white
+            .foregroundColor: Palette.color(forIndex: measurement.colorIndex).nsInkColor
         ])
     }
 
@@ -701,6 +728,194 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         refresh()
     }
 
+    // MARK: History
+
+    /// Undo/redo can restore a different reference mode or custom rect, so the resolved
+    /// reference has to be recomputed before the redraw — otherwise the HUD and every label
+    /// percentage keep quoting the reference the user just undid.
+    private func undo() {
+        session?.undo()
+        resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
+        refresh()
+    }
+
+    private func redo() {
+        session?.redo()
+        resolveReference(at: hovering ? lastCursor : canonicalMouseLocation())
+        refresh()
+    }
+
+    private func duplicateSelected() {
+        guard session?.duplicateSelected() != nil else { return }
+        refresh()
+    }
+
+    private func clearAll() {
+        guard session?.clearAll() == true else { return }
+        refresh()
+    }
+
+    private func editSelectedLabel() {
+        guard let session, let measurement = session.selectedMeasurement,
+              let converter, let display else { return }
+        beginEditingLabel(for: measurement, converter: converter, display: display)
+        refresh()
+    }
+
+    // MARK: Contextual menu
+
+    /// Right-click is the Mac's discovery mechanism: every capability reachable by key —
+    /// delete, duplicate, label, color, undo — has to be reachable here too.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard let session, editingField == nil else { return nil }
+        hideExportMenu()
+        guard let point = canonicalLocation(of: event) else { return nil }
+        lastCursor = point
+
+        if let hit = hitTest(at: point) {
+            session.select(hit.id)
+            refresh()
+            return measurementMenu(for: hit.id, session: session)
+        }
+
+        session.select(nil)
+        refresh()
+        return canvasMenu(session: session)
+    }
+
+    private func measurementMenu(for id: UUID, session: MeasurementSession) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(item("Edit Label…", #selector(menuEditLabel)))
+        menu.addItem(item("Duplicate", #selector(menuDuplicate), key: "d", modifiers: .command))
+        menu.addItem(item("Delete", #selector(menuDelete), key: "\u{8}", modifiers: []))
+        menu.addItem(.separator())
+
+        let colorItem = NSMenuItem(title: "Color", action: nil, keyEquivalent: "")
+        colorItem.submenu = colorMenu(selectedIndex: session.selectedMeasurement?.colorIndex)
+        menu.addItem(colorItem)
+
+        menu.addItem(.separator())
+        addHistoryItems(to: menu, session: session)
+        return menu
+    }
+
+    private func canvasMenu(session: MeasurementSession) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        addHistoryItems(to: menu, session: session)
+        menu.addItem(.separator())
+
+        for kind in [MeasurementKind.rectangle, .horizontal, .vertical] {
+            let toolItem = item(toolMenuTitle(kind), #selector(menuSelectTool), key: toolMenuKey(kind), modifiers: [])
+            toolItem.tag = toolMenuTag(kind)
+            toolItem.state = session.tool == kind && !session.isDrawingCustom ? .on : .off
+            menu.addItem(toolItem)
+        }
+        menu.addItem(item("Custom Reference Frame", #selector(menuBeginCustomFrame), key: "c", modifiers: []))
+
+        menu.addItem(.separator())
+        let clear = item("Clear All Measurements", #selector(menuClearAll))
+        clear.isEnabled = !session.measurements.isEmpty
+        menu.addItem(clear)
+        menu.addItem(item("Done", #selector(menuDismiss), key: "\u{1b}", modifiers: []))
+        return menu
+    }
+
+    private func addHistoryItems(to menu: NSMenu, session: MeasurementSession) {
+        let undoItem = item(undoTitle("Undo", session.undoActionName), #selector(menuUndo), key: "z", modifiers: .command)
+        undoItem.isEnabled = session.canUndo
+        menu.addItem(undoItem)
+
+        let redoItem = item(undoTitle("Redo", session.redoActionName), #selector(menuRedo), key: "z", modifiers: [.command, .shift])
+        redoItem.isEnabled = session.canRedo
+        menu.addItem(redoItem)
+    }
+
+    /// "Undo Move Measurement" when the manager knows the action, plain "Undo" when it doesn't.
+    private func undoTitle(_ verb: String, _ actionName: String) -> String {
+        actionName.isEmpty ? verb : "\(verb) \(actionName)"
+    }
+
+    private func colorMenu(selectedIndex: Int?) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        for index in Palette.colors.indices {
+            let entry = item(Palette.name(forIndex: index).capitalized, #selector(menuSetColor), key: "\(index + 1)", modifiers: [])
+            entry.tag = index
+            entry.state = index == selectedIndex ? .on : .off
+            entry.image = swatchImage(for: index)
+            menu.addItem(entry)
+        }
+        return menu
+    }
+
+    /// SF Symbol swatch, tinted with the palette color — custom artwork is reserved for the
+    /// app icon, so the menu draws `circle.fill` rather than a hand-rolled color chip.
+    private func swatchImage(for index: Int) -> NSImage? {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [Palette.color(forIndex: index).nsColor]))
+        let image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: Palette.name(forIndex: index))?
+            .withSymbolConfiguration(configuration)
+        image?.isTemplate = false
+        return image
+    }
+
+    private func item(_ title: String, _ action: Selector, key: String = "", modifiers: NSEvent.ModifierFlags = []) -> NSMenuItem {
+        let entry = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        entry.keyEquivalentModifierMask = modifiers
+        entry.target = self
+        return entry
+    }
+
+    private func toolMenuTitle(_ kind: MeasurementKind) -> String {
+        switch kind {
+        case .rectangle: return "Rectangle Tool"
+        case .horizontal: return "Horizontal Tool"
+        case .vertical: return "Vertical Tool"
+        }
+    }
+
+    private func toolMenuKey(_ kind: MeasurementKind) -> String {
+        switch kind {
+        case .rectangle: return "r"
+        case .horizontal: return "h"
+        case .vertical: return "v"
+        }
+    }
+
+    private func toolMenuTag(_ kind: MeasurementKind) -> Int {
+        switch kind {
+        case .rectangle: return 0
+        case .horizontal: return 1
+        case .vertical: return 2
+        }
+    }
+
+    private func toolForTag(_ tag: Int) -> MeasurementKind {
+        switch tag {
+        case 1: return .horizontal
+        case 2: return .vertical
+        default: return .rectangle
+        }
+    }
+
+    @objc private func menuUndo() { undo() }
+    @objc private func menuRedo() { redo() }
+    @objc private func menuDuplicate() { duplicateSelected() }
+    @objc private func menuClearAll() { clearAll() }
+    @objc private func menuEditLabel() { editSelectedLabel() }
+    @objc private func menuDismiss() { onDismiss?() }
+    @objc private func menuBeginCustomFrame() { beginCustomFrame() }
+    @objc private func menuSelectTool(_ sender: NSMenuItem) { selectTool(toolForTag(sender.tag)) }
+    @objc private func menuSetColor(_ sender: NSMenuItem) { setColor(index: sender.tag) }
+
+    @objc private func menuDelete() {
+        guard let session, session.selectedID != nil else { return }
+        session.deleteSelected()
+        refresh()
+    }
+
     // MARK: Reference resolution
 
     private func resolveReference(at cursor: CanonicalPoint?) {
@@ -774,7 +989,8 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
         if modifiers.contains(.command) {
             switch characters {
-            case "z": session.undo(); refresh()
+            case "z": modifiers.contains(.shift) ? redo() : undo()
+            case "d": duplicateSelected()
             case "s": hideExportMenu(); onExportSave?()
             case "c": hideExportMenu(); onExportCopy?()
             case "e": toggleExportMenu()
@@ -924,7 +1140,10 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         lastCursor = point
 
         if let drag = activeDrag {
-            if !drag.edited { session.beginTransientEdit(); activeDrag?.edited = true }
+            if !drag.edited {
+                session.beginTransientEdit(actionName: Self.actionName(for: drag.kind))
+                activeDrag?.edited = true
+            }
             applyDrag(drag.kind, to: point, session: session)
             lastDragPoint = point
             refresh()
@@ -963,6 +1182,13 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         session.updateDraft(to: point, constrain: event.modifierFlags.contains(.shift), fromCenter: event.modifierFlags.contains(.option))
         session.commitDraft()
         refresh()
+    }
+
+    private static func actionName(for kind: DragKind) -> String {
+        switch kind {
+        case .move: return "Move Measurement"
+        case .resize: return "Resize Measurement"
+        }
     }
 
     private func applyDrag(_ kind: DragKind, to point: CanonicalPoint, session: MeasurementSession) {

@@ -15,8 +15,9 @@ enum Exporter {
 
     /// Presents a save panel above the overlay windows and writes the PNG on confirm.
     /// `directoryURL`, when non-nil, pre-selects that folder; nil falls back to the system
-    /// default (the panel's own last-used location). Returns the written URL, or nil if
-    /// cancelled or the write failed.
+    /// default (the panel's own last-used location). Returns the written URL, or nil if the
+    /// user cancelled. A failed write raises an alert before returning nil — an export that
+    /// silently does nothing is worse than one that fails loudly.
     @discardableResult
     static func saveToFile(_ data: Data, above overlayWindows: [NSWindow], directoryURL: URL? = nil) -> URL? {
         let panel = NSSavePanel()
@@ -29,14 +30,31 @@ enum Exporter {
             panel.directoryURL = directoryURL
         }
 
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         do {
             try data.write(to: url)
             return url
         } catch {
+            presentWriteFailure(error, url: url, above: overlayWindows)
             return nil
         }
+    }
+
+    /// The export failed after the user chose a destination. Say so, name the destination, and
+    /// carry the underlying reason — the disk being full or the volume read-only is actionable.
+    private static func presentWriteFailure(_ error: Error, url: URL, above overlayWindows: [NSWindow]) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Couldn’t save “\(url.lastPathComponent)”."
+        alert.informativeText = (error as NSError).localizedFailureReason
+            ?? error.localizedDescription
+        alert.addButton(withTitle: "OK")
+
+        // The overlay sits at maximum window level; an alert beneath it would never be seen.
+        alert.window.level = panelLevel(above: overlayWindows)
+        NSApp.activate()
+        alert.runModal()
     }
 
     /// Resolves `SettingsStore.defaultExportFolderPath` to a directory URL for the save

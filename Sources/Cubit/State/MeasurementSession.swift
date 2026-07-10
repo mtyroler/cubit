@@ -31,7 +31,46 @@ final class MeasurementSession {
     var selectedID: UUID?
 
     private let fallbackRect: CanonicalRect
-    private var undoStack: [[Measurement]] = []
+
+    // MARK: Undo
+
+    /// The session's document state, as undo sees it. The custom reference and mode ride along
+    /// with the measurements: drawing a custom frame is an edit, and undo has to unwind it too.
+    private struct Snapshot {
+        var measurements: [Measurement]
+        var selectedID: UUID?
+        var customRect: CanonicalRect?
+        var mode: ReferenceMode
+    }
+
+    /// Real `UndoManager`, not a snapshot array: redo, action names, and unbounded depth come
+    /// free, and the menu/tool-pill affordances can read `undoActionName` to title themselves.
+    /// `groupsByEvent` is off so each registration is exactly one step — deterministic, and
+    /// testable without pumping a run loop.
+    let undoManager: UndoManager = {
+        let manager = UndoManager()
+        manager.groupsByEvent = false
+        return manager
+    }()
+
+    /// `UndoManager` predates observation, so its state is mirrored here for the SwiftUI
+    /// tool pill. Kept in sync by `syncUndoState()` after every mutation, undo, and redo.
+    private(set) var canUndo = false
+    private(set) var canRedo = false
+    private(set) var undoActionName = ""
+    private(set) var redoActionName = ""
+
+    /// Distinct streaks of the same continuous edit on the same measurement collapse into the
+    /// one undo step that preceded them. Holding an arrow key fires a `keyDown` per repeat;
+    /// without this, sixty of them would bury the step that created the shape.
+    private enum CoalesceKey: Equatable {
+        case color(UUID)
+        case geometry(UUID)
+    }
+
+    private static let coalesceWindow: TimeInterval = 1.0
+    private var lastCoalesceKey: CoalesceKey?
+    private var lastCoalesceAt: Date?
 
     init(screenReference: CanonicalRect, scale: CGFloat, mode: ReferenceMode = .windowUnderCursor) {
         self.fallbackRect = screenReference
@@ -129,7 +168,7 @@ final class MeasurementSession {
 
         let (kind, finalRect) = MeasurementEngine.classifyForCommit(kind: draft.kind, rect: rect)
 
-        pushUndo()
+        registerUndo("Add Measurement")
         let measurement = Measurement(kind: kind, rect: finalRect, colorIndex: draft.colorIndex)
         measurements.append(measurement)
         selectedID = measurement.id
@@ -147,9 +186,23 @@ final class MeasurementSession {
     @discardableResult
     func injectProposed(_ proposed: [Measurement]) -> Bool {
         guard !proposed.isEmpty else { return false }
-        pushUndo()
+        registerUndo(proposed.count == 1 ? "Insert Proposed Measurement" : "Insert Proposed Measurements")
         measurements.append(contentsOf: proposed)
         selectedID = proposed.first?.id
+        return true
+    }
+
+    /// Re-seeds a fresh session with the measurements a previous one was carrying (see
+    /// `OverlayController`'s restore path). Undoable as a single step so ⌘Z means "no, I did
+    /// want the clean slate".
+    @discardableResult
+    func restore(_ restored: [Measurement], customRect: CanonicalRect?, mode: ReferenceMode) -> Bool {
+        guard !restored.isEmpty else { return false }
+        registerUndo("Restore Measurements")
+        measurements = restored
+        self.customRect = customRect
+        self.mode = mode
+        selectedID = nil
         return true
     }
 
@@ -174,17 +227,85 @@ final class MeasurementSession {
         let dx = customDraft.current.x - customDraft.anchor.x
         let dy = customDraft.current.y - customDraft.anchor.y
         guard (dx * dx + dy * dy).squareRoot() >= minDrag else { return false }
+        registerUndo("Set Custom Reference")
         customRect = rect
         mode = .custom
         return true
     }
 
     func undo() {
-        guard let previous = undoStack.popLast() else { return }
-        measurements = previous
-        if let selectedID, !measurements.contains(where: { $0.id == selectedID }) {
-            self.selectedID = nil
+        guard undoManager.canUndo else { return }
+        undoManager.undo()
+        endCoalescing()
+        syncUndoState()
+    }
+
+    func redo() {
+        guard undoManager.canRedo else { return }
+        undoManager.redo()
+        endCoalescing()
+        syncUndoState()
+    }
+
+    // MARK: Undo plumbing
+
+    private func currentSnapshot() -> Snapshot {
+        Snapshot(measurements: measurements, selectedID: selectedID, customRect: customRect, mode: mode)
+    }
+
+    private func apply(_ snapshot: Snapshot) {
+        measurements = snapshot.measurements
+        customRect = snapshot.customRect
+        mode = snapshot.mode
+        selectedID = snapshot.selectedID.flatMap { id in
+            measurements.contains(where: { $0.id == id }) ? id : nil
         }
+    }
+
+    /// Registers the pre-edit state as one undo step. Call BEFORE mutating.
+    ///
+    /// `coalescing` collapses a rapid streak of the same edit on the same measurement (holding
+    /// an arrow key, tapping through digits) into the step that preceded the streak. A `nil`
+    /// key ends any streak in progress, so the next edit always registers.
+    private func registerUndo(_ actionName: String, coalescing key: CoalesceKey? = nil) {
+        if let key, key == lastCoalesceKey, let last = lastCoalesceAt,
+           Date().timeIntervalSince(last) < Self.coalesceWindow {
+            lastCoalesceAt = Date()
+            return
+        }
+        lastCoalesceKey = key
+        lastCoalesceAt = key == nil ? nil : Date()
+        registerSnapshot(actionName)
+    }
+
+    /// Symmetric registration: undoing re-registers the state it is about to replace, which is
+    /// what makes the step redoable. `UndoManager` routes that registration onto the redo stack
+    /// automatically while an undo is in flight.
+    private func registerSnapshot(_ actionName: String) {
+        let snapshot = currentSnapshot()
+        undoManager.beginUndoGrouping()
+        undoManager.registerUndo(withTarget: self) { session in
+            MainActor.assumeIsolated {
+                session.registerSnapshot(actionName)
+                session.apply(snapshot)
+                session.syncUndoState()
+            }
+        }
+        undoManager.setActionName(actionName)
+        undoManager.endUndoGrouping()
+        syncUndoState()
+    }
+
+    private func endCoalescing() {
+        lastCoalesceKey = nil
+        lastCoalesceAt = nil
+    }
+
+    private func syncUndoState() {
+        canUndo = undoManager.canUndo
+        canRedo = undoManager.canRedo
+        undoActionName = undoManager.undoActionName
+        redoActionName = undoManager.redoActionName
     }
 
     // MARK: Color assignment
@@ -238,30 +359,14 @@ final class MeasurementSession {
 
     private func cycleSelectedColor(forward: Bool) {
         guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
-        beginColorEdit(for: selectedID)
+        registerUndo("Change Color", coalescing: .color(selectedID))
         measurements[index].colorIndex = Palette.cycledIndex(measurements[index].colorIndex, forward: forward)
     }
 
     private func setSelectedColor(index newIndex: Int) {
         guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
-        beginColorEdit(for: selectedID)
+        registerUndo("Change Color", coalescing: .color(selectedID))
         measurements[index].colorIndex = newIndex
-    }
-
-    /// Committed color edits participate in undo, but rapid cycling (holding X, or tapping
-    /// through several digits) on the *same* measurement within this window collapses into
-    /// the one undo step that preceded the streak, rather than one step per keystroke.
-    private static let colorEditCoalesceWindow: TimeInterval = 1.0
-    private var lastColorEditID: UUID?
-    private var lastColorEditAt: Date?
-
-    private func beginColorEdit(for id: UUID) {
-        let now = Date()
-        let coalescing = lastColorEditID == id
-            && lastColorEditAt.map { now.timeIntervalSince($0) < Self.colorEditCoalesceWindow } == true
-        if !coalescing { pushUndo() }
-        lastColorEditID = id
-        lastColorEditAt = now
     }
 
     // MARK: Selection & editing
@@ -275,10 +380,10 @@ final class MeasurementSession {
         selectedID = id
     }
 
-    /// Call once at the start of an interactive drag/nudge sequence so the whole
-    /// gesture collapses into a single undo step.
-    func beginTransientEdit() {
-        pushUndo()
+    /// Call once at the start of an interactive drag so the whole gesture collapses into a
+    /// single undo step. The drag's own mutations (`updateSelectedRect`) register nothing.
+    func beginTransientEdit(actionName: String = "Move Measurement") {
+        registerUndo(actionName)
     }
 
     func updateSelectedRect(_ rect: CanonicalRect) {
@@ -286,33 +391,59 @@ final class MeasurementSession {
         measurements[index].rect = rect
     }
 
+    /// Arrow-key move. Auto-repeat fires this many times a second, so the streak coalesces —
+    /// one held keypress is one undo step, not sixty that evict the step you actually wanted.
     func nudgeSelected(dx: CGFloat, dy: CGFloat) {
         guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
-        pushUndo()
+        registerUndo("Move Measurement", coalescing: .geometry(selectedID))
         measurements[index].rect = MeasurementEngine.moved(measurements[index].rect, dx: dx, dy: dy)
     }
 
+    /// Arrow-key resize. Coalesces on the same key as `nudgeSelected` on purpose: a streak of
+    /// move-then-resize on one measurement is a single continuous adjustment to the user.
     func resizeSelected(edge: RectEdge, by delta: CGFloat) {
         guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
-        pushUndo()
+        registerUndo("Resize Measurement", coalescing: .geometry(selectedID))
         measurements[index].rect = MeasurementEngine.resized(measurements[index].rect, edge: edge, by: delta)
     }
 
     func deleteSelected() {
         guard let selectedID, let index = measurements.firstIndex(where: { $0.id == selectedID }) else { return }
-        pushUndo()
+        registerUndo("Delete Measurement")
         measurements.remove(at: index)
         self.selectedID = nil
     }
 
-    func setLabel(_ label: String, for id: UUID) {
-        guard let index = measurements.firstIndex(where: { $0.id == id }) else { return }
-        pushUndo()
-        measurements[index].label = label
+    /// Copies the selected measurement, offset down-right so it reads as a new shape rather
+    /// than a redraw. The duplicate takes the next unused palette color and becomes selected.
+    @discardableResult
+    func duplicateSelected(offset: CGFloat = 12) -> Measurement? {
+        guard let selected = selectedMeasurement else { return nil }
+        registerUndo("Duplicate Measurement")
+        let copy = Measurement(
+            kind: selected.kind,
+            rect: MeasurementEngine.moved(selected.rect, dx: offset, dy: offset),
+            label: selected.label,
+            colorIndex: nextColorIndex()
+        )
+        measurements.append(copy)
+        selectedID = copy.id
+        return copy
     }
 
-    private func pushUndo() {
-        undoStack.append(measurements)
-        if undoStack.count > 50 { undoStack.removeFirst() }
+    @discardableResult
+    func clearAll() -> Bool {
+        guard !measurements.isEmpty else { return false }
+        registerUndo("Clear All Measurements")
+        measurements.removeAll()
+        selectedID = nil
+        return true
+    }
+
+    func setLabel(_ label: String, for id: UUID) {
+        guard let index = measurements.firstIndex(where: { $0.id == id }) else { return }
+        guard measurements[index].label != label else { return }
+        registerUndo(label.isEmpty ? "Remove Label" : "Rename Measurement")
+        measurements[index].label = label
     }
 }

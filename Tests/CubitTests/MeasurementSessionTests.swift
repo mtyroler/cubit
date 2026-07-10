@@ -49,6 +49,193 @@ final class MeasurementSessionTests: XCTestCase {
         XCTAssertTrue(session.measurements.isEmpty)
     }
 
+    // MARK: redo
+
+    func testRedoReappliesAnUndoneCommit() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 0, y: 0), to: CanonicalPoint(x: 50, y: 50))
+        let id = session.measurements[0].id
+
+        session.undo()
+        XCTAssertTrue(session.measurements.isEmpty)
+        XCTAssertTrue(session.canRedo)
+
+        session.redo()
+        XCTAssertEqual(session.measurements.map(\.id), [id])
+        XCTAssertFalse(session.canRedo)
+    }
+
+    func testUndoRedoRoundTripsRepeatedly() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 0, y: 0), to: CanonicalPoint(x: 50, y: 50))
+        for _ in 0..<3 {
+            session.undo()
+            XCTAssertEqual(session.measurements.count, 0)
+            session.redo()
+            XCTAssertEqual(session.measurements.count, 1)
+        }
+    }
+
+    func testNewEditClearsTheRedoStack() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 0, y: 0), to: CanonicalPoint(x: 50, y: 50))
+        session.undo()
+        XCTAssertTrue(session.canRedo)
+
+        commitRect(session, from: CanonicalPoint(x: 200, y: 200), to: CanonicalPoint(x: 250, y: 250))
+        XCTAssertFalse(session.canRedo, "a fresh edit invalidates the redo branch")
+    }
+
+    func testCanUndoAndActionNameTrackTheLastEdit() {
+        let session = makeSession()
+        XCTAssertFalse(session.canUndo)
+
+        commitRect(session, from: CanonicalPoint(x: 0, y: 0), to: CanonicalPoint(x: 50, y: 50))
+        XCTAssertTrue(session.canUndo)
+        XCTAssertEqual(session.undoActionName, "Add Measurement")
+
+        session.deleteSelected()
+        XCTAssertEqual(session.undoActionName, "Delete Measurement")
+
+        session.undo()
+        XCTAssertEqual(session.redoActionName, "Delete Measurement")
+    }
+
+    // MARK: arrow-key coalescing
+
+    /// A held arrow key fires `keyDown` per auto-repeat. Each repeat used to push its own undo
+    /// snapshot, so a two-second press buried — and, past the old 50-deep cap, evicted — the
+    /// step that created the shape. The whole streak is now one step.
+    func testHeldArrowKeyCoalescesIntoASingleUndoStep() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 100, y: 100), to: CanonicalPoint(x: 200, y: 200))
+        let origin = session.measurements[0].rect
+
+        for _ in 0..<60 { session.nudgeSelected(dx: 1, dy: 0) }
+        XCTAssertEqual(session.measurements[0].rect.origin.x, origin.origin.x + 60)
+
+        session.undo()
+        XCTAssertEqual(session.measurements[0].rect, origin, "one undo unwinds the whole streak")
+
+        session.undo()
+        XCTAssertTrue(session.measurements.isEmpty, "the commit step survived the streak")
+    }
+
+    func testArrowResizeCoalescesWithNudgeOnTheSameMeasurement() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 100, y: 100), to: CanonicalPoint(x: 200, y: 200))
+        let origin = session.measurements[0].rect
+
+        session.nudgeSelected(dx: 5, dy: 0)
+        session.resizeSelected(edge: .maxX, by: 5)
+
+        session.undo()
+        XCTAssertEqual(session.measurements[0].rect, origin, "one continuous adjustment, one step")
+    }
+
+    func testNudgingADifferentMeasurementStartsANewUndoStep() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 0, y: 0), to: CanonicalPoint(x: 50, y: 50))
+        commitRect(session, from: CanonicalPoint(x: 300, y: 300), to: CanonicalPoint(x: 350, y: 350))
+        let firstID = session.measurements[0].id
+        let secondID = session.measurements[1].id
+
+        session.select(firstID)
+        session.nudgeSelected(dx: 10, dy: 0)
+        session.select(secondID)
+        session.nudgeSelected(dx: 10, dy: 0)
+
+        session.undo()
+        XCTAssertEqual(session.measurements.first(where: { $0.id == secondID })?.rect.origin.x, 300)
+        XCTAssertEqual(session.measurements.first(where: { $0.id == firstID })?.rect.origin.x, 10, "first nudge untouched")
+    }
+
+    // MARK: custom reference
+
+    func testUndoUnwindsTheCustomReferenceFrame() {
+        let session = makeSession()
+        session.beginCustomDraw()
+        session.beginCustomDraft(at: CanonicalPoint(x: 10, y: 10))
+        session.updateCustomDraft(to: CanonicalPoint(x: 300, y: 300))
+        XCTAssertTrue(session.commitCustomDraft())
+        XCTAssertEqual(session.mode, .custom)
+        XCTAssertNotNil(session.customRect)
+
+        session.undo()
+        XCTAssertNil(session.customRect, "the custom frame is an edit, and undo unwinds it")
+        XCTAssertNotEqual(session.mode, .custom)
+    }
+
+    // MARK: duplicate / clear
+
+    func testDuplicateSelectedOffsetsAndSelectsTheCopy() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 100, y: 100), to: CanonicalPoint(x: 200, y: 200))
+        let original = session.measurements[0]
+
+        let copy = session.duplicateSelected(offset: 12)
+        XCTAssertEqual(session.measurements.count, 2)
+        XCTAssertEqual(copy?.rect.origin.x, original.rect.origin.x + 12)
+        XCTAssertEqual(copy?.rect.origin.y, original.rect.origin.y + 12)
+        XCTAssertEqual(copy?.kind, original.kind)
+        XCTAssertNotEqual(copy?.colorIndex, original.colorIndex, "the copy takes the next free color")
+        XCTAssertEqual(session.selectedID, copy?.id)
+
+        session.undo()
+        XCTAssertEqual(session.measurements.count, 1)
+    }
+
+    func testDuplicateWithNoSelectionIsANoOp() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 0, y: 0), to: CanonicalPoint(x: 50, y: 50))
+        session.select(nil)
+        XCTAssertNil(session.duplicateSelected())
+        XCTAssertEqual(session.measurements.count, 1)
+    }
+
+    func testClearAllIsUndoable() {
+        let session = makeSession()
+        commitRect(session, from: CanonicalPoint(x: 0, y: 0), to: CanonicalPoint(x: 50, y: 50))
+        commitRect(session, from: CanonicalPoint(x: 100, y: 100), to: CanonicalPoint(x: 150, y: 150))
+
+        XCTAssertTrue(session.clearAll())
+        XCTAssertTrue(session.measurements.isEmpty)
+        XCTAssertNil(session.selectedID)
+
+        session.undo()
+        XCTAssertEqual(session.measurements.count, 2)
+    }
+
+    func testClearAllOnAnEmptySessionIsANoOp() {
+        let session = makeSession()
+        XCTAssertFalse(session.clearAll())
+        XCTAssertFalse(session.canUndo)
+    }
+
+    // MARK: restore
+
+    func testRestoreReinstatesMeasurementsAsOneUndoStep() {
+        let session = makeSession()
+        let restored = [
+            Measurement(kind: .rectangle, rect: CanonicalRect(x: 10, y: 10, width: 40, height: 40), colorIndex: 0),
+            Measurement(kind: .horizontal, rect: CanonicalRect(x: 60, y: 60, width: 80, height: 0), colorIndex: 1)
+        ]
+
+        XCTAssertTrue(session.restore(restored, customRect: nil, mode: .screen))
+        XCTAssertEqual(session.measurements.count, 2)
+        XCTAssertEqual(session.mode, .screen)
+        XCTAssertNil(session.selectedID, "a restore selects nothing — the user didn't just draw these")
+
+        session.undo()
+        XCTAssertTrue(session.measurements.isEmpty, "⌘Z after a restore gives the clean slate back")
+    }
+
+    func testRestoreOfNothingIsANoOp() {
+        let session = makeSession()
+        XCTAssertFalse(session.restore([], customRect: nil, mode: .screen))
+        XCTAssertFalse(session.canUndo)
+    }
+
     func testUndoRestoresMeasurementAfterDelete() {
         let session = makeSession()
         commitRect(session, from: CanonicalPoint(x: 0, y: 0), to: CanonicalPoint(x: 50, y: 50))

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -46,17 +47,24 @@ private struct GeneralSettingsTab: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Launch at login", isOn: $settings.launchAtLogin)
-                Toggle("Show percent in menu bar", isOn: $settings.showMenuBarPercent)
+                Toggle("Launch at Login", isOn: $settings.launchAtLogin)
+                if let failure = settings.launchAtLoginFailure {
+                    FailureNote(
+                        message: "Couldn’t change the login item. \(failure)",
+                        actionTitle: "Open Login Items Settings",
+                        action: openLoginItemsSettings
+                    )
+                }
+                Toggle("Show Percent in Menu Bar", isOn: $settings.showMenuBarPercent)
             }
             Section("Defaults") {
-                Picker("Default tool", selection: $settings.defaultTool) {
+                Picker("Default Tool", selection: $settings.defaultTool) {
                     Text("Rectangle").tag(MeasurementKind.rectangle)
                     Text("Horizontal").tag(MeasurementKind.horizontal)
                     Text("Vertical").tag(MeasurementKind.vertical)
                 }
-                Picker("Default reference", selection: $settings.defaultReferenceMode) {
-                    Text("Window under cursor").tag(ReferenceMode.windowUnderCursor)
+                Picker("Default Reference", selection: $settings.defaultReferenceMode) {
+                    Text("Window Under Cursor").tag(ReferenceMode.windowUnderCursor)
                     Text("Screen").tag(ReferenceMode.screen)
                     Text("Custom").tag(ReferenceMode.custom)
                 }
@@ -65,6 +73,39 @@ private struct GeneralSettingsTab: View {
         .formStyle(.grouped)
         .padding(.bottom, 16)
         .scrollDisabled(true)
+        // The login item can be flipped in System Settings while Cubit runs; re-read it rather
+        // than trusting the value cached at launch.
+        .onAppear { settings.refreshLaunchAtLogin() }
+    }
+
+    private func openLoginItemsSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") else { return }
+        NSWorkspace.shared.open(url)
+    }
+}
+
+/// Inline, non-modal failure note: what went wrong, and the one button that fixes it.
+private struct FailureNote: View {
+    let message: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionTitle, let action {
+                    Button(actionTitle, action: action)
+                        .controlSize(.small)
+                }
+            }
+        }
     }
 }
 
@@ -83,6 +124,12 @@ private struct ShortcutsSettingsTab: View {
                         hotkeyManager.rebind(keyCode: newKeyCode, carbonModifiers: newModifiers)
                     }
                     .frame(width: 160, height: 24)
+                }
+
+                if hotkeyManager.registrationFailed {
+                    FailureNote(
+                        message: "macOS refused this shortcut — another app is probably already using it. Pick a different combination."
+                    )
                 }
 
                 Button("Reset to Default") {

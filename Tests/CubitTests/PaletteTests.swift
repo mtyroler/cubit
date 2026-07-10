@@ -43,6 +43,47 @@ final class PaletteTests: XCTestCase {
         XCTAssertEqual(Palette.name(forIndex: -1), "gray")
     }
 
+    // MARK: ink
+
+    /// The guarantee the overlay and the exporter both rely on: whatever swatch a measurement
+    /// lands on, its label is readable. White-on-yellow — the old unconditional choice — was
+    /// 1.3:1, well under the 3:1 floor for even large text.
+    func testEveryPaletteColorClearsAAContrastWithItsInk() {
+        for index in 0..<8 {
+            let color = Palette.color(forIndex: index)
+            XCTAssertGreaterThanOrEqual(
+                color.inkContrastRatio, 4.5,
+                "\(Palette.name(forIndex: index)) label fails WCAG AA for normal text"
+            )
+        }
+    }
+
+    func testInkPicksWhicheverToneContrastsMore() {
+        // Light swatches take the dark ink...
+        for name in ["orange", "sky blue", "yellow", "gray"] {
+            let index = Palette.colorNames.firstIndex(of: name)!
+            XCTAssertEqual(Palette.color(forIndex: index).ink, .darkInk, "\(name) should take dark ink")
+        }
+        // ...and the one genuinely dark swatch keeps white.
+        let blue = Palette.colorNames.firstIndex(of: "blue")!
+        XCTAssertEqual(Palette.color(forIndex: blue).ink, .lightInk, "blue should keep white ink")
+    }
+
+    func testRelativeLuminanceMatchesWCAGReferenceValues() {
+        // Black, white, and mid gray against the published sRGB curve.
+        XCTAssertEqual(PaletteColor(white: 0).relativeLuminance, 0, accuracy: 0.0001)
+        XCTAssertEqual(PaletteColor(white: 1).relativeLuminance, 1, accuracy: 0.0001)
+        XCTAssertEqual(PaletteColor(white: 0.5).relativeLuminance, 0.2140, accuracy: 0.0005)
+    }
+
+    func testContrastRatioIsSymmetricAndBounded() {
+        let black = PaletteColor(white: 0)
+        let white = PaletteColor(white: 1)
+        XCTAssertEqual(black.contrastRatio(against: white), 21, accuracy: 0.0001)
+        XCTAssertEqual(white.contrastRatio(against: black), 21, accuracy: 0.0001)
+        XCTAssertEqual(white.contrastRatio(against: white), 1, accuracy: 0.0001)
+    }
+
     // MARK: cycledIndex
 
     func testCycledIndexForwardWrapsAtEight() {
