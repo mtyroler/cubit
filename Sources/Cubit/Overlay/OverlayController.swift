@@ -114,6 +114,13 @@ final class OverlayController {
         let service = captureService
         let captureTask = Task { await service.captureAll(requests) }
 
+        // Freeze the WINDOW STACK next to the pixels. The overlay measures a photograph, so
+        // "the window under the cursor" must mean the window that was there when the shutter
+        // fired. Resolving against the live list lets a ⌘Tab mid-session silently re-point the
+        // reference at a window that isn't in the frozen image — the overlay keeps showing the
+        // old scene while the percentages, and any export, describe a different window.
+        let frozenWindows = FrozenWindowInfoProvider(snapshot: CGWindowInfoProvider().windows())
+
         // Race the capture against a short timeout so a fast snapshot freezes the scene
         // immediately, while a slow one never delays the overlay appearing.
         let early = await Self.raceValue(of: captureTask, timeoutMillis: 300)
@@ -126,7 +133,8 @@ final class OverlayController {
             descriptors: descriptors,
             converter: converter,
             session: session,
-            captured: earlyDisplays
+            captured: earlyDisplays,
+            provider: frozenWindows
         )
         orderWindowsFront()
 
@@ -158,10 +166,10 @@ final class OverlayController {
         descriptors: [DisplayDescriptor],
         converter: CoordinateConverter,
         session: MeasurementSession,
-        captured: [CapturedDisplay]
+        captured: [CapturedDisplay],
+        provider: some WindowInfoProviding
     ) {
         let screenRects = descriptors.map(converter.canonicalFrame(of:))
-        let provider = CGWindowInfoProvider()
         let excludedPID = getpid()
 
         for (screen, descriptor) in zip(screens, descriptors) {
